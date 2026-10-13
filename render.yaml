@@ -1,0 +1,23 @@
+# Render.com par Max server deploy karne ki settings (Blueprint).
+# Secrets (API keys) yahan NAHI hain — wo Render dashboard mein daalni hain (sync: false).
+services:
+  - type: web
+    name: max-server
+    runtime: node
+    plan: free
+    region: singapore # India ke sabse paas
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MAX_API_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false

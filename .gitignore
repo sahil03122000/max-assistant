@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+server/data/
+
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.cxx/
+*.apk
+*.aab
+android/max.properties
+android/app/src/main/assets/vosk-model/
