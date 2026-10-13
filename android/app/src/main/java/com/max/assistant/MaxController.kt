@@ -133,7 +133,12 @@ class MaxController(private val activity: Activity, private val scope: Coroutine
         handle(text, fromVoice = true)
     }
 
-    private suspend fun handle(text: String, fromVoice: Boolean) {
+    private suspend fun handle(rawText: String, fromVoice: Boolean) {
+        // Card/OTP/password jaisi cheezein phone se bahar jaane se pehle hi chhupa do.
+        val privacy = PrivacyFilter.apply(rawText)
+        val text = privacy.text
+        if (privacy.hidden.isNotEmpty()) DebugLog.i("🔒 Private jaankari chhupayi: ${privacy.hidden.joinToString()}")
+
         addMessage(fromUser = true, text = text)
         state = MaxState.Thinking
         DebugLog.i("Aap: $text")

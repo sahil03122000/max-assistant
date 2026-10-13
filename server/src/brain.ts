@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { ApiError, GoogleGenAI, type Content, type FunctionCall, type Part } from "@google/genai";
 import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
+import { maskPrivate } from "./privacy.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { trimHistory, type PendingAction, type PendingSlot, type Session } from "./sessions.js";
 import { ALL_TOOLS, isDeviceTool, runServerTool } from "./tools.js";
@@ -36,7 +37,9 @@ export class HttpError extends Error {
   }
 }
 
-export function handleUserMessage(session: Session, text: string): Promise<TurnResult> {
+export function handleUserMessage(session: Session, rawText: string): Promise<TurnResult> {
+  const { text, hidden } = maskPrivate(rawText);
+  if (hidden.length) console.log(`   🔒 private chhupaya: ${hidden.join(", ")}`);
   return withSessionLock(session, () => {
     const parts: Part[] = [];
     // User ne naya command de diya jab pichhle kaam pending the — unhe cancel maan lo.
