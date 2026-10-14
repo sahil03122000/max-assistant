@@ -42,6 +42,8 @@ class WakeWordService : Service(), RecognitionListener {
         const val WAKE_NOTIFICATION_ID = 43
         private const val ACTION_STOP = "com.max.assistant.STOP_WAKE_WORD"
         private const val SAMPLE_RATE = 16000f
+        private const val RESUME_QUIET_MS = 2000L
+        private val WAKE_PHRASE = Regex("""\b(hello|hey|hi) max\b""")
 
         // "[unk]" baaki sab aawazon ko pakad leta hai, taaki har cheez "hello max" na ban jaaye.
         private const val GRAMMAR = """["hello max", "hey max", "hi max", "[unk]"]"""
@@ -92,6 +94,7 @@ class WakeWordService : Service(), RecognitionListener {
     private var speechService: SpeechService? = null
     private var paused = false
     private var lastWakeAt = 0L
+    private var ignoreUntil = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -172,6 +175,7 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun resumeListening() {
         paused = false
+        ignoreUntil = SystemClock.elapsedRealtime() + RESUME_QUIET_MS
         startListening()
     }
 
@@ -193,9 +197,12 @@ class WakeWordService : Service(), RecognitionListener {
         val text = hypothesis?.let { runCatching { JSONObject(it).optString(key) }.getOrNull() } ?: return
         // Debug: wake word ne poora vaakya kya suna (sirf final result, partial bahut zyada hote hain).
         if (key == "text" && text.isNotBlank()) DebugLog.i("👂 suna: '$text'")
-        if (!text.contains("max")) return
-        // Ek hi "Hello Max" se do baar trigger na ho.
+        // Poora phrase chahiye — akele "max" (ya milti-julti aawaz) par jaagna galti se trigger karta tha.
+        if (!WAKE_PHRASE.containsMatchIn(text)) return
         val now = SystemClock.elapsedRealtime()
+        // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.
+        if (now < ignoreUntil) return
+        // Ek hi "Hello Max" se do baar trigger na ho.
         if (now - lastWakeAt < 3000) return
         lastWakeAt = now
         DebugLog.i("👂 Wake word: '$text'")
