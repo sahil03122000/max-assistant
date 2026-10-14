@@ -7,6 +7,7 @@ import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.AlarmClock
@@ -264,6 +265,10 @@ class DeviceActions(private val context: Context) {
             else -> {
                 // Phone ka apna Camera app. Front camera ke liye alag-alag phones alag "extra" padhte hain — sab bhej do.
                 val launch = Intent(if (video) MediaStore.INTENT_ACTION_VIDEO_CAMERA else MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Kai apps ye kaam kar sakte hain to Android "kaunse app se?" list dikhata hai (aur panel band hote hi
+                // wo list bhi band) — isliye seedha phone ka apna (system) Camera app chuno.
+                systemCameraPackage(launch)?.let { launch.setPackage(it) }
                 if (front) {
                     launch.putExtra("android.intent.extras.CAMERA_FACING", 1)
                         .putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
@@ -294,6 +299,12 @@ class DeviceActions(private val context: Context) {
         if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
             throw SecurityException(message)
         }
+    }
+
+    private fun systemCameraPackage(intent: Intent): String? {
+        val handlers = context.packageManager.queryIntentActivities(intent, 0)
+        val system = handlers.firstOrNull { it.activityInfo.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 }
+        return (system ?: handlers.firstOrNull())?.activityInfo?.packageName
     }
 
     private fun isInstalled(pkg: String): Boolean =
