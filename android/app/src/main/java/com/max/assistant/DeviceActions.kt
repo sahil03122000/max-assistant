@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.MediaStore
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
@@ -219,12 +220,44 @@ class DeviceActions(private val context: Context) {
             "back" -> false
             else -> mode != CameraActivity.MODE_PHOTO
         }
-        val what = when (mode) {
-            CameraActivity.MODE_VIDEO -> "video recording"
-            CameraActivity.MODE_PHOTO -> "photo"
-            else -> "selfie (Max chehra dekh ke guide karega aur khud click karega)"
+        val video = mode == CameraActivity.MODE_VIDEO
+        return when (args.optString("app").ifBlank { "phone" }) {
+            "max" -> {
+                val what = when (mode) {
+                    CameraActivity.MODE_VIDEO -> "video recording"
+                    CameraActivity.MODE_PHOTO -> "photo"
+                    else -> "selfie (Max chehra dekh ke guide karega aur khud click karega)"
+                }
+                Outcome(true, result = "Max ka camera khulega: $what", launch = CameraActivity.intent(context, mode, front))
+            }
+            "snapchat" -> {
+                val launch = context.packageManager.getLaunchIntentForPackage("com.snapchat.android")
+                    ?: return Outcome(false, error = "Phone mein Snapchat install nahi hai")
+                Outcome(true, result = "Snapchat camera khulega, click user khud karega", launch = launch)
+            }
+            "instagram" -> {
+                if (!isInstalled("com.instagram.android")) return Outcome(false, error = "Phone mein Instagram install nahi hai")
+                val launch = Intent(Intent.ACTION_VIEW, Uri.parse("instagram://camera")).setPackage("com.instagram.android")
+                Outcome(true, result = "Instagram camera khulega, click user khud karega", launch = launch)
+            }
+            else -> {
+                // Phone ka apna Camera app. Front camera ke liye alag-alag phones alag "extra" padhte hain — sab bhej do.
+                val launch = Intent(if (video) MediaStore.INTENT_ACTION_VIDEO_CAMERA else MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+                if (front) {
+                    launch.putExtra("android.intent.extras.CAMERA_FACING", 1)
+                        .putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
+                        .putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
+                        .putExtra("com.google.assistant.extra.USE_FRONT_CAMERA", true)
+                }
+                val what = if (video) "video mode" else if (front) "selfie (front camera)" else "photo"
+                Outcome(
+                    true,
+                    result = "Phone ka Camera app $what mein khulega; click user khud karega. " +
+                        "(Kuch phones front camera khud select nahi karte — tab user ko camera palatna hoga.)",
+                    launch = launch,
+                )
+            }
         }
-        return Outcome(true, result = "Camera khulega: $what", launch = CameraActivity.intent(context, mode, front))
     }
 
     // ---------- Helpers ----------
