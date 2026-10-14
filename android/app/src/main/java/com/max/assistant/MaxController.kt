@@ -66,6 +66,8 @@ class MaxController(
     private val sessionId = UUID.randomUUID().toString()
     private var job: Job? = null
     private var currentRun = 0
+    // "Hello Max" sunna rokne ke liye is controller ka naam (har panel ka alag).
+    private val holdTag = "controller@${System.identityHashCode(this)}"
     @Volatile private var interrupted = false
 
     fun onMicTap() {
@@ -141,14 +143,14 @@ class MaxController(
     fun destroy() {
         stop()
         speaker.shutdown()
-        WakeWordService.resume()
+        WakeWordService.resume(holdTag)
     }
 
     private fun start(block: suspend () -> Unit) {
         stop()
         val runId = ++currentRun
         // Max bol/sun raha hai tab "Hello Max" wala mic chhod de.
-        WakeWordService.pause()
+        WakeWordService.pause(holdTag)
         job = scope.launch {
             try {
                 block()
@@ -175,7 +177,7 @@ class MaxController(
                 if (runId == currentRun) {
                     state = MaxState.Idle
                     partialText = ""
-                    WakeWordService.resume()
+                    WakeWordService.resume(holdTag)
                 }
             }
         }

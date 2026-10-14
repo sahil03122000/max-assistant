@@ -164,13 +164,13 @@ class CameraActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // Video mic use karega, aur Max ki apni aawaz par "Hello Max" na sune.
-        WakeWordService.pause()
+        WakeWordService.pause("camera")
     }
 
     override fun onStop() {
         super.onStop()
         activeRecording?.stop()
-        WakeWordService.resume()
+        WakeWordService.resume("camera")
         if (!isChangingConfigurations) finish()
     }
 

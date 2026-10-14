@@ -373,6 +373,7 @@ private fun SettingsDialog(
     var voice by remember { mutableStateOf(settings.voice) }
     var phoneVoice by remember { mutableStateOf(settings.phoneVoice) }
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
+    var activeStyle by remember { mutableStateOf(settings.activeStyle) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -407,6 +408,21 @@ private fun SettingsDialog(
                         Toast.makeText(context, "Installed apps → Max — phone control → ON", Toast.LENGTH_LONG).show()
                         context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
+                }
+                Text("\"Hello Max\" par kya dikhe", style = MaterialTheme.typography.labelLarge)
+                listOf(
+                    Settings.STYLE_LIGHT to "🌈 Sirf screen ke kinaron par RGB light",
+                    Settings.STYLE_PANEL to "Neeche panel (text + buttons)",
+                ).forEach { (id, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = activeStyle == id, onClick = { activeStyle = id }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = activeStyle == id, onClick = { activeStyle = id })
+                        Text(label)
+                    }
                 }
                 Text("Max ki aawaz (naam par tap = sunao)", style = MaterialTheme.typography.labelLarge)
                 Settings.VOICES.forEach { (id, label) ->
@@ -472,6 +488,7 @@ private fun SettingsDialog(
                 settings.serverUrl = url
                 settings.language = language
                 settings.voice = voice
+                settings.activeStyle = activeStyle
                 settings.phoneVoice = phoneVoice
                 if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
                 onDismiss()

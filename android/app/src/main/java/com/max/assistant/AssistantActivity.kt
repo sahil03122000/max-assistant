@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -73,9 +74,18 @@ class AssistantActivity : ComponentActivity() {
         setTurnScreenOn(true)
 
         controller = MaxController(this, lifecycleScope, onLaunch = { finish() })
+        val lightOnly = controller.settings.activeStyle == Settings.STYLE_LIGHT
+        if (lightOnly) {
+            // Sirf kinaron par roshni — touch peeche wali app ko jaaye (Max beech mein na aaye).
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+        }
         setContent {
             MaxTheme {
-                AssistantSheet(controller, onDismiss = { finish() })
+                if (lightOnly) {
+                    LightOnlyMode(controller, onDismiss = { finish() })
+                } else {
+                    AssistantSheet(controller, onDismiss = { finish() })
+                }
             }
         }
         if (savedInstanceState == null) wake(intent)
@@ -129,6 +139,28 @@ private fun vibrate(context: Context) {
         context.getSystemService(Vibrator::class.java)
     }
     runCatching { vibrator.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE)) }
+}
+
+/** Sirf screen ke kinaron par RGB roshni — koi panel/text nahi. Baat khatam hone ke 2 sec baad band. */
+@Composable
+private fun LightOnlyMode(controller: MaxController, onDismiss: () -> Unit) {
+    val state = controller.state
+    var wasActive by remember { mutableStateOf(false) }
+    LaunchedEffect(state) {
+        if (state != MaxState.Idle) {
+            wasActive = true
+        } else if (wasActive) {
+            delay(2000)
+            onDismiss()
+        }
+    }
+    BackHandler(onBack = onDismiss)
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+    EdgeGlow(state, controller.micLevel)
 }
 
 @Composable

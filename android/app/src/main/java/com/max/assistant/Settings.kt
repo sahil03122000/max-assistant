@@ -12,6 +12,14 @@ class Settings(context: Context) {
         get() = prefs.getString("server_url", null) ?: BuildConfig.MAX_SERVER_URL
         set(value) = prefs.edit { putString("server_url", value.trim()) }
 
+    /**
+     * "Hello Max" par kya dikhe: [STYLE_LIGHT] = sirf screen ke kinaron par RGB roshni (peeche ki app chhoo sakte ho),
+     * [STYLE_PANEL] = neeche panel (text + buttons).
+     */
+    var activeStyle: String
+        get() = prefs.getString("active_style", null) ?: STYLE_LIGHT
+        set(value) = prefs.edit { putString("active_style", value) }
+
     /** "Hello Max" wake word chalu hai ya nahi. */
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)
@@ -37,6 +45,8 @@ class Settings(context: Context) {
 
     companion object {
         const val PHONE_VOICE = "phone"
+        const val STYLE_LIGHT = "light"
+        const val STYLE_PANEL = "panel"
 
         /** Server ki aawazein (server/src/tts.ts ke VOICES jaisi) + phone ki offline aawaz. */
         val VOICES = listOf(

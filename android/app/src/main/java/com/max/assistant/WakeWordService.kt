@@ -63,13 +63,27 @@ class WakeWordService : Service(), RecognitionListener {
         }
 
         /** Max khud mic use kare (aapki baat sune) tab wake word ko mic chhodna padta hai. */
-        fun pause() {
+        /**
+         * Kaun-kaun abhi mic/Max use kar raha hai (panel, camera coach, Max camera...). "Hello Max" sunna tabhi
+         * wapas chalu jab SAB khatam — pehle ek kaam ka resume dusre chalte kaam ke beech sunna chalu kar deta
+         * tha, aur "Max" bolne par ek saath do baat-cheet shuru ho jaati thi.
+         */
+        private val holds = mutableSetOf<String>()
+
+        fun pause(owner: String) {
+            synchronized(holds) { holds += owner }
             instance?.pauseListening()
         }
 
-        fun resume() {
-            instance?.resumeListening()
+        fun resume(owner: String) {
+            val free = synchronized(holds) {
+                holds -= owner
+                holds.isEmpty()
+            }
+            if (free) instance?.resumeListening()
         }
+
+        private val isHeld: Boolean get() = synchronized(holds) { holds.isNotEmpty() }
 
         /**
          * Conversation mode: "Hello Max" ke baad sirf "Max" bolna kaafi. "Max stop" / ✕ se khatam,
@@ -151,7 +165,7 @@ class WakeWordService : Service(), RecognitionListener {
                 }
                 model = loaded
                 DebugLog.i("Wake word ready — 'Hello Max' bolo")
-                if (!paused) startListening()
+                if (!paused && !isHeld) startListening()
             },
             { error -> DebugLog.e("Wake word model load nahi hua", error) },
         )
@@ -208,6 +222,7 @@ class WakeWordService : Service(), RecognitionListener {
     }
 
     private fun resumeListening() {
+        if (isHeld) return // koi kaam abhi bhi chal raha hai
         paused = false
         ignoreUntil = SystemClock.elapsedRealtime() + RESUME_QUIET_MS
         startListening()
