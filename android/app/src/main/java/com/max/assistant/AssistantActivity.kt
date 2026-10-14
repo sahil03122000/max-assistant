@@ -63,6 +63,7 @@ class AssistantActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.init(this)
         enableEdgeToEdge()
         // Phone lock ho tab bhi panel upar aa jaaye.
         setShowWhenLocked(true)
@@ -82,7 +83,13 @@ class AssistantActivity : ComponentActivity() {
         wake()
     }
 
+    override fun onStart() {
+        super.onStart()
+        isOpen = true
+    }
+
     override fun onDestroy() {
+        isOpen = false
         controller.destroy()
         super.onDestroy()
     }
@@ -93,6 +100,11 @@ class AssistantActivity : ComponentActivity() {
     }
 
     companion object {
+        /** Panel abhi khula hai? (WakeWordService check karti hai ki panel sach mein khula ya nahi.) */
+        @Volatile
+        var isOpen = false
+            private set
+
         fun intent(context: Context): Intent =
             Intent(context, AssistantActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

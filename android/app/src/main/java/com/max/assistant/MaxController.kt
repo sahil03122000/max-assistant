@@ -12,12 +12,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.util.UUID
 
@@ -65,9 +68,44 @@ class MaxController(
     /** "Hello Max" suna gaya — beep karo aur seedha suno. */
     fun onWake() {
         start {
-            beep()
+            greet()
+            beep() // "ab bolo" ka ishaara
             listenAndHandle()
         }
+    }
+
+    /**
+     * "Haan ji Sahil, bataiye..." — har baar natural aawaz banane mein ~5 sec lagte, isliye ek baar
+     * banakar phone mein save kar lete hain. Jab tak save nahi hui, phone ki aawaz mein bolo.
+     */
+    private suspend fun greet() {
+        val name = settings.userName
+        val text = if (name.isBlank()) "Haan ji, bataiye main aapki kya madad kar sakta hoon?"
+        else "Haan ji $name, bataiye main aapki kya madad kar sakta hoon?"
+        addMessage(fromUser = false, text = text, saveToHistory = false)
+        state = MaxState.Speaking
+
+        val voice = settings.voice
+        val cached = File(activity.cacheDir, "greeting_${voice}_${text.hashCode()}.wav")
+        if (voice != Settings.PHONE_VOICE && cached.exists()) {
+            try {
+                voicePlayer.play(withContext(Dispatchers.IO) { cached.readBytes() })
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                DebugLog.e("Greeting play nahi hui", e)
+            }
+        }
+        if (voice != Settings.PHONE_VOICE) {
+            // Agli baar ke liye natural aawaz background mein bana kar rakh lo.
+            scope.launch {
+                fetchVoice(text, voice)?.let { wav ->
+                    withContext(Dispatchers.IO) { runCatching { cached.writeBytes(wav) } }
+                }
+            }
+        }
+        speaker.speak(text)
     }
 
     fun onTextSubmit(text: String) {
@@ -227,8 +265,9 @@ class MaxController(
         null
     }
 
-    private fun addMessage(fromUser: Boolean, text: String) {
+    private fun addMessage(fromUser: Boolean, text: String, saveToHistory: Boolean = true) {
         messages += ChatMessage(fromUser, text)
+        if (!saveToHistory) return
         scope.launch {
             runCatching { history.append(fromUser, text) }
                 .onFailure { DebugLog.e("History save nahi hui", it) }

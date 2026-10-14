@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.init(this)
         enableEdgeToEdge()
         controller = MaxController(this, lifecycleScope)
         requestMissingPermissions()
@@ -352,6 +353,7 @@ private fun SettingsDialog(
     var language by remember { mutableStateOf(settings.language) }
     var voice by remember { mutableStateOf(settings.voice) }
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
+    var userName by remember { mutableStateOf(settings.userName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -371,6 +373,13 @@ private fun SettingsDialog(
                     }
                     Switch(checked = wakeWord, onCheckedChange = { wakeWord = it })
                 }
+                OutlinedTextField(
+                    value = userName,
+                    onValueChange = { userName = it },
+                    label = { Text("Aapka naam") },
+                    supportingText = { Text("\"Haan ji $userName, bataiye...\"") },
+                    singleLine = true,
+                )
                 Text("Max ki aawaz (naam par tap = sunao)", style = MaterialTheme.typography.labelLarge)
                 Settings.VOICES.forEach { (id, label) ->
                     Row(
@@ -414,6 +423,7 @@ private fun SettingsDialog(
                 settings.serverUrl = url
                 settings.language = language
                 settings.voice = voice
+                settings.userName = userName
                 if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
                 onDismiss()
             }) { Text("Save") }

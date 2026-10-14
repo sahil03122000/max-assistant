@@ -12,6 +12,11 @@ class Settings(context: Context) {
         get() = prefs.getString("server_url", null) ?: BuildConfig.MAX_SERVER_URL
         set(value) = prefs.edit { putString("server_url", value.trim()) }
 
+    /** "Hello Max" par Max isi naam se bulata hai: "Haan ji Sahil..." */
+    var userName: String
+        get() = prefs.getString("user_name", null) ?: "Sahil"
+        set(value) = prefs.edit { putString("user_name", value.trim()) }
+
     /** "Hello Max" wake word chalu hai ya nahi. */
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)

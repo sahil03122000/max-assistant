@@ -8,8 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.PixelFormat
 import android.os.IBinder
 import android.os.SystemClock
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
@@ -86,6 +90,7 @@ class WakeWordService : Service(), RecognitionListener {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.init(this)
         instance = this
         startForeground(
             NOTIFICATION_ID,
@@ -122,6 +127,8 @@ class WakeWordService : Service(), RecognitionListener {
     override fun onDestroy() {
         instance = null
         main.removeCallbacks(keepAlive)
+        main.removeCallbacks(wakeWatchdog)
+        removeBridgeWindow()
         stopListening()
         model?.close()
         model = null
@@ -179,6 +186,8 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun check(hypothesis: String?, key: String) {
         val text = hypothesis?.let { runCatching { JSONObject(it).optString(key) }.getOrNull() } ?: return
+        // Debug: wake word ne poora vaakya kya suna (sirf final result, partial bahut zyada hote hain).
+        if (key == "text" && text.isNotBlank()) DebugLog.i("👂 suna: '$text'")
         if (!text.contains("max")) return
         // Ek hi "Hello Max" se do baar trigger na ho.
         val now = SystemClock.elapsedRealtime()
@@ -190,14 +199,56 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun onWake() {
         pauseListening()
-        try {
-            // Poora app nahi — chalti app ke upar chhota Max panel (Google Assistant jaisa).
-            startActivity(AssistantActivity.intent(this))
-        } catch (e: Exception) {
-            // "Display over other apps" permission na ho to Android background se screen nahi kholne deta.
-            DebugLog.e("Max ki screen nahi khuli — 'Display over other apps' permission do", e)
+        // Android 15+: background se screen kholne ke liye "Display over other apps" permission ke saath
+        // app ki ek overlay window us waqt DIKH rahi honi chahiye. Isliye pehle 1px ki window, phir panel.
+        showBridgeWindow()
+        main.postDelayed({
+            try {
+                // Poora app nahi — chalti app ke upar chhota Max panel (Google Assistant jaisa).
+                startActivity(AssistantActivity.intent(this))
+            } catch (e: Exception) {
+                DebugLog.e("Max ki screen nahi khuli", e)
+            }
+            main.postDelayed(::removeBridgeWindow, 2000)
+        }, 150)
+        // Android ne chupchap rok diya ho to Max hamesha ke liye "behra" na reh jaaye.
+        main.postDelayed(wakeWatchdog, 8000)
+    }
+
+    private val wakeWatchdog = Runnable {
+        if (paused && !AssistantActivity.isOpen) {
+            DebugLog.e("Max panel nahi khula — 'Display over other apps' permission check karo. Phir se sun raha hoon.")
             resumeListening()
         }
+    }
+
+    private var bridgeWindow: View? = null
+
+    private fun showBridgeWindow() {
+        if (bridgeWindow != null) return
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            DebugLog.e("'Display over other apps' permission nahi hai — Max panel background se nahi khul payega")
+            return
+        }
+        val view = View(this)
+        val params = WindowManager.LayoutParams(
+            1, 1,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        try {
+            getSystemService(WindowManager::class.java).addView(view, params)
+            bridgeWindow = view
+        } catch (e: Exception) {
+            DebugLog.e("Overlay window nahi lagi", e)
+        }
+    }
+
+    private fun removeBridgeWindow() {
+        val view = bridgeWindow ?: return
+        bridgeWindow = null
+        runCatching { getSystemService(WindowManager::class.java).removeView(view) }
     }
 
     private fun buildNotification(): Notification {
