@@ -54,7 +54,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -246,13 +249,30 @@ private fun ChatList(messages: List<ChatMessage>, thinking: Boolean, modifier: M
 }
 
 @Composable
-private fun Bubble(text: String, fromUser: Boolean) {
+private fun Bubble(text: String, fromUser: Boolean, highlight: String = "") {
+    val highlightColor = MaterialTheme.colorScheme.tertiaryContainer
+    // Search kiya hua shabd message mein highlight karo.
+    val content = remember(text, highlight, highlightColor) {
+        buildAnnotatedString {
+            append(text)
+            if (highlight.isNotEmpty()) {
+                var start = text.indexOf(highlight, ignoreCase = true)
+                while (start >= 0) {
+                    addStyle(
+                        SpanStyle(background = highlightColor, fontWeight = FontWeight.Bold),
+                        start, start + highlight.length,
+                    )
+                    start = text.indexOf(highlight, start + highlight.length, ignoreCase = true)
+                }
+            }
+        }
+    }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
         Text(
-            text,
+            content,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .background(
@@ -452,11 +472,12 @@ private fun LogScreen(onClose: () -> Unit) {
     }
 }
 
-/** Saari purani baat-cheet, date ke hisaab se (sabse nayi upar). Sirf padhne ke liye. */
+/** Saari purani baat-cheet, date ke hisaab se (sabse nayi upar). Sirf padhne ke liye, search ke saath. */
 @Composable
 private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     var entries by remember { mutableStateOf<List<HistoryEntry>?>(null) }
+    var query by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { entries = store.load() }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
@@ -471,17 +492,41 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onClose) { Text("Close") }
             }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("🔍 History mein dhundho...") },
+                singleLine = true,
+                trailingIcon = {
+                    if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("✕") }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            )
+            val search = query.trim()
             val list = entries
+            val shown = remember(list, search) {
+                if (search.isEmpty()) list else list?.filter { it.text.contains(search, ignoreCase = true) }
+            }
+            if (search.isNotEmpty() && shown != null) {
+                Text(
+                    if (shown.isEmpty()) "\"$search\" kahin nahi mila" else "${shown.size} message mile",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             when {
-                list == null -> Text("Load ho raha hai...")
-                list.isEmpty() -> Text(
+                shown == null -> Text("Load ho raha hai...")
+                list.isNullOrEmpty() -> Text(
                     "Abhi tak koi baat-cheet nahi hui",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                shown.isEmpty() -> Unit
                 else -> {
                     val zone = ZoneId.systemDefault()
-                    val byDay = remember(list) {
-                        list.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+                    val byDay = remember(shown) {
+                        shown.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
                             .toSortedMap(compareByDescending { it })
                     }
                     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -501,7 +546,7 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Bubble(entry.text, entry.fromUser)
+                                    Bubble(entry.text, entry.fromUser, highlight = search)
                                 }
                             }
                         }
