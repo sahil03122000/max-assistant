@@ -12,6 +12,12 @@ const Env = z.object({
     .string()
     .default("gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.1-flash-lite,gemini-3.7-flash,gemini-3.6-flash,gemini-3-flash-preview,gemini-3.5-flash")
     .transform((s) => s.split(",").map((m) => m.trim()).filter(Boolean)),
+  // Groq (free, bahut tez) — ho to Max pehle yahi use karta hai, phir Gemini. https://console.groq.com
+  GROQ_API_KEY: z.string().min(1).optional(),
+  GROQ_MODELS: z
+    .string()
+    .default("openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b")
+    .transform((s) => s.split(",").map((m) => m.trim()).filter(Boolean)),
   // Natural aawaz (text-to-speech). Pehla busy ho to agla.
   GEMINI_TTS_MODELS: z
     .string()

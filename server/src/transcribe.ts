@@ -4,6 +4,7 @@
 import { ApiError, GoogleGenAI, Type } from "@google/genai";
 import { isTimeout } from "./brain.js";
 import { config } from "./config.js";
+import { groqEnabled, groqTranscribe } from "./groq.js";
 
 const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
 
@@ -22,8 +23,20 @@ function peakDb(wav: Buffer): number {
   return peak === 0 ? -100 : 20 * Math.log10(peak / 32768);
 }
 
+// Whisper shor/chup par aksar ye "sunta" hai — inhe asli baat mat maano.
+const WHISPER_HALLUCINATIONS = /^(thank you|thanks for watching|you|bye|subtitles?.*|please subscribe.*|धन्यवाद|शुक्रिया)[.!\s]*$/i;
+
 export async function transcribe(wav: Buffer): Promise<string> {
   if (peakDb(wav) < -45) return "";
+  // Pehle Groq Whisper (free, tez); fail ho to Gemini.
+  if (groqEnabled()) {
+    try {
+      const text = await groqTranscribe(wav);
+      return WHISPER_HALLUCINATIONS.test(text) ? "" : text;
+    } catch (err) {
+      console.warn(`  🎙️ Whisper fail (${err instanceof Error ? err.message.slice(0, 60) : err}), Gemini try...`);
+    }
+  }
   const models = [...config.GEMINI_FALLBACK_MODELS, config.GEMINI_MODEL];
   for (const model of models) {
     try {

@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { ApiError, GoogleGenAI, type Content, type FunctionCall, type Part } from "@google/genai";
 import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
+import { groqEnabled, GroqError, groqThink } from "./groq.js";
 import { maskPrivate } from "./privacy.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { trimHistory, type PendingAction, type PendingSlot, type Session, type UserProfile } from "./sessions.js";
@@ -162,6 +163,27 @@ async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Pr
 }
 
 async function think(history: Content[], systemInstruction: string): Promise<Content> {
+  // Pehle Groq (free, ~1 sec). Limit/busy ho to Gemini.
+  if (groqEnabled()) {
+    for (const model of config.GROQ_MODELS) {
+      const key = `groq:${model}`;
+      if ((limitHitUntil.get(key) ?? 0) > Date.now()) continue;
+      try {
+        return await groqThink(model, history, systemInstruction, ALL_TOOLS);
+      } catch (err) {
+        if (err instanceof GroqError && err.status === 429) {
+          // Groq free: ~8000 tokens/minute (jaldi khulti hai) aur ~1000 requests/din. Message mein
+          // "Upgrade ... today" bhi likha hota hai — isliye sirf asli "per day" ko din wali limit maano.
+          const daily = /per day|\(RPD\)|\(TPD\)/i.test(err.message);
+          const waitSec = Number(err.message.match(/try again in ([\d.]+)s/i)?.[1] ?? 20);
+          limitHitUntil.set(key, Date.now() + (daily ? LIMIT_COOLDOWN_MS : Math.ceil(waitSec * 1000)));
+          console.warn(`  🚫 Groq ${model} ki limit (${daily ? "aaj ki" : `${Math.ceil(waitSec)} sec`}), agla...`);
+        } else {
+          console.warn(`  ⚡ Groq ${model} fail (${err instanceof Error ? err.message.slice(0, 80) : err}), agla...`);
+        }
+      }
+    }
+  }
   let lastError: unknown;
   const triedThisTurn = new Set<string>();
   for (const { model, delayMs } of ATTEMPTS) {
@@ -178,7 +200,8 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
         config: { systemInstruction, tools: [{ functionDeclarations: ALL_TOOLS }], abortSignal: AbortSignal.timeout(15_000) },
       });
       const content = res.candidates?.[0]?.content;
-      if (!content?.parts?.length) throw new HttpError(502, "AI ne khaali jawab diya");
+      // Kaam (jaise gaana) ke baad AI kabhi kuch bolna zaroori nahi samajhta — error nahi, chhota sa "Theek hai".
+      if (!content?.parts?.length) return { role: "model", parts: [{ text: "Theek hai." }] };
       return { role: "model", parts: content.parts };
     } catch (err) {
       lastError = err;
@@ -218,7 +241,16 @@ function spokenText(content: Content): string {
     .map((p) => p.text)
     .join("")
     .trim();
-  return stripLeakedReasoning(text);
+  return toSpokenLine(stripLeakedReasoning(text));
+}
+
+// Jawab bola jaata hai — list ("1. Sitaare\n2. Shayad") ko ek saaf vaakya mein: "Sitaare, Shayad. Kaunsa?"
+function toSpokenLine(text: string): string {
+  const lines = text
+    .split(/\n+/)
+    .map((l) => l.replace(/^\s*(?:\d+[.)]|[-*•])\s*/, "").replace(/\*\*/g, "").trim())
+    .filter(Boolean);
+  return lines.reduce((acc, line) => (!acc ? line : /[.?!,:]$/.test(acc) ? `${acc} ${line}` : `${acc}, ${line}`), "");
 }
 
 // Kuch (khaas kar backup) models kabhi-kabhi apni "andar ki soch" bhi normal text mein likh dete hain
