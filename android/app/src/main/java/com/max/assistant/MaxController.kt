@@ -255,7 +255,7 @@ class MaxController(
     }
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? = try {
-        withTimeoutOrNull(15_000) { api.tts(text, voice) }
+        withTimeoutOrNull(8_000) { api.tts(text, voice) }
             ?: null.also { DebugLog.i("Natural aawaz slow — phone ki aawaz") }
     } catch (e: CancellationException) {
         throw e

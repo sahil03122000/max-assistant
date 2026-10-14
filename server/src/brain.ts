@@ -188,9 +188,30 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
 }
 
 function spokenText(content: Content): string {
-  return (content.parts ?? [])
+  const text = (content.parts ?? [])
     .filter((p) => p.text && !p.thought)
     .map((p) => p.text)
     .join("")
     .trim();
+  return stripLeakedReasoning(text);
+}
+
+// Kuch (khaas kar backup) models kabhi-kabhi apni "andar ki soch" bhi normal text mein likh dete hain
+// ("The user spoke in Hindi... Wait, the prompt says..."), jo phir Max zor se bol deta tha.
+const REASONING_MARKERS = /\b(the user|user (?:said|wrote|spoke|used)|the prompt|system prompt|let'?s (?:respond|reply)|wait,|i should|i will reply|my reply)\b/i;
+
+export function stripLeakedReasoning(text: string): string {
+  if (!REASONING_MARKERS.test(text)) return text;
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  // Asli jawab aksar aakhri line hoti hai — aur kabhi quotes ke baad chipka hota hai: ...: "x" or "y"Jawab
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    const afterQuotes = line.includes('"') ? line.slice(line.lastIndexOf('"') + 1).trim() : line;
+    const candidate = afterQuotes || line;
+    if (candidate && !REASONING_MARKERS.test(candidate)) {
+      console.warn("   ✂️ AI ki andar ki soch hata di");
+      return candidate.replace(/^["'“”]+|["'“”]+$/g, "").trim();
+    }
+  }
+  return text;
 }
