@@ -26,6 +26,24 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
     suspend fun sendResults(sessionId: String, results: JSONArray): Turn =
         post("/v1/chat/actions", JSONObject().put("sessionId", sessionId).put("results", results))
 
+    /** Max ke bolte waqt user ne jo bola (WAV) → Roman Hinglish text. */
+    suspend fun transcribe(wav: ByteArray): String = withContext(Dispatchers.IO) {
+        val conn = URL(baseUrl().trimEnd('/') + "/v1/transcribe").openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 30_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "audio/wav")
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.outputStream.use { it.write(wav) }
+            if (conn.responseCode !in 200..299) throw ServerException("Aawaz likhi nahi ja saki")
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).optString("text")
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** Text → natural aawaz (WAV bytes). */
     suspend fun tts(text: String, voice: String): ByteArray =
         request("/v1/tts", JSONObject().put("text", text).put("voice", voice), readTimeoutMs = 20_000)

@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -185,6 +186,24 @@ class MaxController(
      * Max seedha band nahi hota — pehle ek baar poochhta hai, phir bhi chup to pyaar se alvida.
      */
     private suspend fun listenAndHandle(inConversation: Boolean = false, silentTries: Int = 0, beepWhenReady: Boolean = true) {
+        // User ne Max ke bolte waqt hi jawab de diya tha? Wahi recording use karo, dobara mat poochho.
+        bargedUtterance?.let { wav ->
+            bargedUtterance = null
+            state = MaxState.Thinking
+            val heard = try {
+                api.transcribe(wav).trim()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                DebugLog.e("Beech wali baat likhi nahi ja saki", e)
+                ""
+            }
+            DebugLog.i("🎙️ Beech mein suna: '$heard'")
+            if (heard.isNotBlank() && !justInterrupt.matches(heard)) {
+                handle(heard, fromVoice = true)
+                return
+            }
+        }
         if (!speech.isAvailable()) {
             say("Is phone par speech recognition available nahi hai. Google app install ya update karo.")
             return
@@ -322,8 +341,17 @@ class MaxController(
         state = MaxState.Speaking
         // Bolte waqt "Max stop" / "ruko" suno, taaki user beech mein rok sake.
         // "Max" bol ke bhi rok sakte ho — bas tab nahi jab Max khud apna naam bol raha ho.
+        // Aur koi bhi baat bole (jaise Max ke sawaal ka jawab, sawaal poora hone se pehle) to Max chup ho ke
+        // wo baat record kar leta hai — dobara bolne ki zaroorat nahi.
+        val utterance = CompletableDeferred<ByteArray>()
         val bargeIn = WakeWordService.sharedModel?.let { model ->
-            BargeInListener(model, allowName = !text.contains("max", ignoreCase = true)) { interrupt() }
+            BargeInListener(
+                model,
+                allowName = !text.contains("max", ignoreCase = true),
+                onStop = { interrupt() },
+                onSpeechStart = { interrupt() },
+                onUtterance = { utterance.complete(it) },
+            )
         }
         bargeIn?.start()
         try {
@@ -339,9 +367,22 @@ class MaxController(
             }
             if (!interrupted) speaker.speak(text, settings.phoneVoice)
         } finally {
+            if (bargeIn?.isCapturing == true) {
+                // User abhi bhi bol raha hai — baat poori hone do.
+                state = MaxState.Listening
+                bargedUtterance = withTimeoutOrNull(10_000) { utterance.await() }
+            } else if (utterance.isCompleted) {
+                bargedUtterance = utterance.await()
+            }
             withContext(Dispatchers.IO) { bargeIn?.stop() }
         }
     }
+
+    /** Max ke bolte waqt user ne jo bola (recording) — agla [listenAndHandle] mic ki jagah isse kaam lega. */
+    @Volatile private var bargedUtterance: ByteArray? = null
+
+    /** Sirf rokne wale shabd ("Max", "stop") — inke baad naya sawaal suno, inhe command mat samjho. */
+    private val justInterrupt = Regex("""^(max|stop|ruko|max stop|bas karo|chup)[.!\s]*$""", RegexOption.IGNORE_CASE)
 
     /** User ne Max ko bolte-bolte roka ("Max stop" ya "Ruko" button). */
     fun interrupt() {

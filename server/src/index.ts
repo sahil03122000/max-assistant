@@ -13,6 +13,7 @@ import { handleActionResults, handleUserMessage, HttpError, type TurnResult } fr
 import { config } from "./config.js";
 import { memoryBackend, memoryStore } from "./memory.js";
 import { getSession } from "./sessions.js";
+import { transcribe } from "./transcribe.js";
 import { synthesize } from "./tts.js";
 
 // Abhi ek token = ek user. Startup ke time yahan proper login (Supabase Auth) aayega
@@ -94,6 +95,14 @@ app.post("/v1/tts", async (req, res) => {
   const body = TtsBody.parse(req.body);
   const audio = await synthesize(body.text, body.voice ?? config.GEMINI_TTS_VOICE);
   res.type("audio/wav").send(audio);
+});
+
+// Max ke bolte waqt user ne beech mein jo bola — WAV recording → Roman Hinglish text.
+app.post("/v1/transcribe", express.raw({ type: "audio/*", limit: "3mb" }), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1000) throw new HttpError(400, "Audio nahi mila");
+  const text = await transcribe(req.body);
+  console.log(`🎙️  (beech mein) ${text || "(kuch saaf nahi)"}`);
+  res.json({ text });
 });
 
 app.get("/v1/memories", async (_req, res) => {
