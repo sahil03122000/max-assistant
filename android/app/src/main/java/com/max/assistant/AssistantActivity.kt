@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -137,12 +139,22 @@ private fun AssistantSheet(controller: MaxController, onDismiss: () -> Unit) {
     }
     BackHandler(onBack = onDismiss)
 
+    // Panel khula hai tab tak screen band na ho (baat karte waqt lock na lage).
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+
     val noRipple = remember { MutableInteractionSource() }
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(interactionSource = noRipple, indication = null, onClick = onDismiss),
+            // Max baat kar raha ho tab galti se bahar tap (jaise screen jagaane ke liye) panel band na kare.
+            .clickable(interactionSource = noRipple, indication = null) {
+                if (state == MaxState.Idle) onDismiss()
+            },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
@@ -179,8 +191,11 @@ private fun AssistantSheet(controller: MaxController, onDismiss: () -> Unit) {
                     MaterialTheme.colorScheme.onSurface
                 },
             )
-            if (state == MaxState.Idle && wasActive) {
-                TextButton(onClick = controller::onMicTap) { Text("🎙  Phir se bolo") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state == MaxState.Idle && wasActive) {
+                    TextButton(onClick = controller::onMicTap) { Text("🎙  Phir se bolo") }
+                }
+                TextButton(onClick = onDismiss) { Text("✕  Band karo") }
             }
         }
     }

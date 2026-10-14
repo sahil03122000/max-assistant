@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -162,6 +164,11 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
         mutableStateOf(if (controller.profiles.load().isEmpty) Screen.Welcome else Screen.Chat)
     }
     var showSettings by remember { mutableStateOf(false) }
+
+    // Max sun/soch/bol raha ho tab screen band na ho; baat khatam to phone ka normal timeout.
+    val view = LocalView.current
+    val busy = controller.state != MaxState.Idle
+    SideEffect { view.keepScreenOn = busy }
 
     when (screen) {
         Screen.Welcome, Screen.Profile -> {
