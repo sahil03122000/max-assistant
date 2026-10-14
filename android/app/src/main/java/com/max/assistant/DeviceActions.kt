@@ -70,22 +70,57 @@ class DeviceActions(private val context: Context) {
         }
     }
 
-    private fun sendSms(args: JSONObject): Outcome = withContact(args) { c ->
-        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(c.number)))
-            .putExtra("sms_body", args.optString("message"))
-        // Seedha SMS bhejne ki permission Play Store aasaani se nahi deta — isliye message app khol kar taiyaar karte hain.
-        Outcome(true, result = "${c.name} ke liye SMS app mein message taiyaar hai, user ko Send dabana hoga", launch = intent)
+    private fun sendSms(args: JSONObject): Outcome {
+        lockedError()?.let { return it }
+        return withContact(args) { c ->
+            val message = args.optString("message")
+            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(c.number)))
+                .putExtra("sms_body", message)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Seedha SMS bhejne ki permission Play Store nahi deta — app khol ke Phase 2 se Send dabate hain.
+            autoSend(MessageSender.App.SMS, message, c.name, intent)
+        }
     }
 
     private fun sendWhatsApp(args: JSONObject): Outcome {
+        lockedError()?.let { return it }
         val pkg = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull(::isInstalled)
             ?: return Outcome(false, error = "Phone mein WhatsApp install nahi hai")
         return withContact(args) { c ->
+            val message = args.optString("message")
             val phone = whatsAppNumber(c.number)
-            val uri = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=" + Uri.encode(args.optString("message")))
-            val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg)
-            // Auto-send Phase 2 (Accessibility) mein aayega.
-            Outcome(true, result = "WhatsApp par ${c.name} ki chat message ke saath khulegi, user ko Send dabana hoga", launch = intent)
+            val uri = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=" + Uri.encode(message))
+            val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            autoSend(MessageSender.App.WHATSAPP, message, c.name, intent)
+        }
+    }
+
+    /** Phone control ON ho to Max khud Send dabata hai, warna sirf chat khol ke user ko bolta hai. */
+    private fun autoSend(app: MessageSender.App, message: String, name: String, intent: Intent): Outcome =
+        if (MaxAccessibilityService.isEnabled) {
+            Outcome(
+                true,
+                result = "${app.label} par $name ki chat khulegi aur Max khud Send karega. Abhi sirf 'bhej raha hoon' " +
+                    "jaisa bolo (bhej diya mat bolo — bhejne ke baad phone khud 'Bhej diya' bolega), aur follow-up sawaal mat poocho.",
+                launch = intent,
+                afterLaunch = { MaxAccessibilityService.instance?.startMessageSend(app, message) },
+            )
+        } else {
+            Outcome(
+                true,
+                result = "${app.label} par $name ki chat message ke saath khulegi, user ko Send dabana hoga " +
+                    "(Max khud bheje iske liye Settings mein 'Phone control' ON karna hoga)",
+                launch = intent,
+            )
+        }
+
+    /** Phone lock ho to message mat bhejo — koi bhi "Hello Max" bol ke aapke naam se message na bhej sake. */
+    private fun lockedError(): Outcome? {
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        return if (keyguard.isKeyguardLocked) {
+            Outcome(false, error = "Phone lock hai — message bhejne se pehle user ko phone unlock karna hoga (unlock_phone tool use kar sakte ho)")
+        } else {
+            null
         }
     }
 

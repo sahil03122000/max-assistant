@@ -70,6 +70,12 @@ class MaxAccessibilityService : AccessibilityService() {
         task = scope.launch { PhoneCameraCoach(this@MaxAccessibilityService, scope).run() }
     }
 
+    /** WhatsApp / SMS chat khulne ke baad message khud send karo. */
+    fun startMessageSend(app: MessageSender.App, message: String) {
+        task?.cancel()
+        task = scope.launch { MessageSender(this@MaxAccessibilityService, scope, app, message).run() }
+    }
+
     fun stopTask() {
         task?.cancel()
         task = null
