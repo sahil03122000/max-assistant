@@ -13,6 +13,20 @@ export interface PendingAction {
 // Har slot AI ke ek function call ke barabar hai, same order mein.
 export type PendingSlot = { action: PendingAction; callId?: string } | { response: Part };
 
+/**
+ * Phone ka bheja hua profile — sirf baat-cheet ke liye zaroori hissa. DOB aur last name phone
+ * kabhi nahi bhejta; birthday ho to sirf `birthdayToday: true`.
+ */
+export interface UserProfile {
+  callingName?: string;
+  gender?: "male" | "female" | "unspecified";
+  addressStyle?: "aap" | "tum";
+  city?: string;
+  profession?: string;
+  interests?: string;
+  birthdayToday?: boolean;
+}
+
 export interface Session {
   key: string;
   userId: string;
@@ -20,6 +34,7 @@ export interface Session {
   pending: PendingSlot[] | null;
   busy: boolean;
   updatedAt: number;
+  profile?: UserProfile;
 }
 
 const SESSION_TTL_MS = 30 * 60 * 1000;

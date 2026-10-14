@@ -2,10 +2,28 @@
 // Max ka behaviour badalna ho to sabse pehle yahin dekho.
 import { config } from "./config.js";
 import type { Memory } from "./memory.js";
+import type { UserProfile } from "./sessions.js";
 
 const MAX_MEMORIES_IN_PROMPT = 200;
 
-export function buildSystemPrompt(memories: Memory[], now: Date): string {
+function profileSection(p: UserProfile | undefined): string {
+  if (!p) return "(not shared)";
+  const lines = [
+    p.callingName && `- Call them: ${p.callingName}`,
+    p.addressStyle === "tum"
+      ? `- Address them casually with "tum" (like a close friend)`
+      : `- Address them respectfully with "aap"`,
+    p.gender === "male" && `- Male — use masculine Hindi verb forms ("kar rahe ho", "gaye the")`,
+    p.gender === "female" && `- Female — use feminine Hindi verb forms ("kar rahi ho", "gayi thi")`,
+    p.city && `- Lives in: ${p.city}`,
+    p.profession && `- Work/studies: ${p.profession}`,
+    p.interests && `- Interests: ${p.interests}`,
+    p.birthdayToday && `- 🎂 TODAY IS THEIR BIRTHDAY — wish them warmly in your first reply of the conversation (once).`,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+export function buildSystemPrompt(memories: Memory[], now: Date, profile?: UserProfile): string {
   const time = now.toLocaleString("en-IN", { timeZone: config.TIMEZONE, dateStyle: "full", timeStyle: "short" });
   const memoryLines = memories
     .slice(-MAX_MEMORIES_IN_PROMPT)
@@ -37,6 +55,9 @@ export function buildSystemPrompt(memories: Memory[], now: Date): string {
 
 ## Context
 Current date and time: ${time} (${config.TIMEZONE})
+
+About the user (from their profile — use naturally, don't recite it):
+${profileSection(profile)}
 
 What you remember about the user:
 ${memoryLines || "(nothing yet)"}`;

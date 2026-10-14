@@ -13,7 +13,7 @@ import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
 import { maskPrivate } from "./privacy.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { trimHistory, type PendingAction, type PendingSlot, type Session } from "./sessions.js";
+import { trimHistory, type PendingAction, type PendingSlot, type Session, type UserProfile } from "./sessions.js";
 import { ALL_TOOLS, isDeviceTool, runServerTool } from "./tools.js";
 import { searchYouTube } from "./youtube.js";
 
@@ -37,7 +37,8 @@ export class HttpError extends Error {
   }
 }
 
-export function handleUserMessage(session: Session, rawText: string): Promise<TurnResult> {
+export function handleUserMessage(session: Session, rawText: string, profile?: UserProfile): Promise<TurnResult> {
+  if (profile) session.profile = profile;
   const { text, hidden } = maskPrivate(rawText);
   if (hidden.length) console.log(`   🔒 private chhupaya: ${hidden.join(", ")}`);
   return withSessionLock(session, () => {
@@ -100,7 +101,7 @@ function functionResponse(id: string | undefined, name: string, response: Record
 async function runLoop(session: Session): Promise<TurnResult> {
   for (let step = 0; step < MAX_STEPS; step++) {
     const memories = await memoryStore.list(session.userId);
-    const content = await think(session.history, buildSystemPrompt(memories, new Date()));
+    const content = await think(session.history, buildSystemPrompt(memories, new Date(), session.profile));
     session.history.push(content);
 
     const reply = spokenText(content);

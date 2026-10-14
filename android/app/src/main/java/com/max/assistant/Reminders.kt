@@ -12,6 +12,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.time.ZonedDateTime
 
 /**
  * Reminders: AlarmManager tay time par ReminderReceiver ko jagata hai, wo notification dikhata hai.
@@ -40,7 +41,41 @@ object Reminders {
         DebugLog.i("Reminder scheduled: '$text'")
     }
 
-    fun show(context: Context, text: String) {
+    private const val BIRTHDAY_REQUEST_CODE = 777
+    private const val BIRTHDAY_HOUR = 9
+
+    /**
+     * Agle birthday par subah 9 baje wish. Har baar app khulne / profile save hone par dobara set hota hai
+     * (same request code = purana replace), aur notification ke baad agle saal ka apne aap.
+     */
+    fun scheduleBirthday(context: Context) {
+        val profile = ProfileStore(context).load()
+        val intent = Intent(context, ReminderReceiver::class.java).setAction(ReminderReceiver.ACTION_BIRTHDAY)
+        val pending = PendingIntent.getBroadcast(
+            context, BIRTHDAY_REQUEST_CODE, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val alarms = context.getSystemService(AlarmManager::class.java)
+        val now = ZonedDateTime.now()
+        val thisYear = profile.birthdayIn(now.year)?.atTime(BIRTHDAY_HOUR, 0)?.atZone(now.zone)
+        if (thisYear == null) {
+            alarms.cancel(pending) // DOB hata di gayi
+            return
+        }
+        val next = if (thisYear.isAfter(now)) thisYear
+        else profile.birthdayIn(now.year + 1)!!.atTime(BIRTHDAY_HOUR, 0).atZone(now.zone)
+        alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.toInstant().toEpochMilli(), pending)
+    }
+
+    fun showBirthday(context: Context) {
+        val profile = ProfileStore(context).load()
+        if (profile.isBirthday()) {
+            val name = profile.displayName.ifBlank { "dost" }
+            show(context, "Happy Birthday $name! 🎂🎉 Aapka din bahut shandaar ho. — Max", title = "Max 🎂")
+        }
+        scheduleBirthday(context) // agle saal ka
+    }
+
+    fun show(context: Context, text: String, title: String = "Max reminder") {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Max reminders", NotificationManager.IMPORTANCE_HIGH),
@@ -48,7 +83,7 @@ object Reminders {
         if (!canNotify(context)) return
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Max reminder")
+            .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -60,10 +95,15 @@ object Reminders {
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Reminders.show(context, intent.getStringExtra(EXTRA_TEXT) ?: "Reminder")
+        if (intent.action == ACTION_BIRTHDAY) {
+            Reminders.showBirthday(context)
+        } else {
+            Reminders.show(context, intent.getStringExtra(EXTRA_TEXT) ?: "Reminder")
+        }
     }
 
     companion object {
         const val EXTRA_TEXT = "text"
+        const val ACTION_BIRTHDAY = "com.max.assistant.BIRTHDAY"
     }
 }

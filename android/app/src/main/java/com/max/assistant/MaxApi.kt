@@ -20,8 +20,8 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
     /** Server ne error message bheja (jaise "free limit khatam") — ye user ko bola ja sakta hai. */
     class ServerException(message: String) : Exception(message)
 
-    suspend fun chat(sessionId: String, message: String): Turn =
-        post("/v1/chat", JSONObject().put("sessionId", sessionId).put("message", message))
+    suspend fun chat(sessionId: String, message: String, profile: JSONObject? = null): Turn =
+        post("/v1/chat", JSONObject().put("sessionId", sessionId).put("message", message).put("profile", profile))
 
     suspend fun sendResults(sessionId: String, results: JSONArray): Turn =
         post("/v1/chat/actions", JSONObject().put("sessionId", sessionId).put("results", results))

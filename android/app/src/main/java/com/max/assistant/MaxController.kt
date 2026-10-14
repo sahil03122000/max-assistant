@@ -50,6 +50,7 @@ class MaxController(
 
     val settings = Settings(activity)
     val history = HistoryStore(activity)
+    val profiles = ProfileStore(activity)
     private val api = MaxApi({ settings.serverUrl }, BuildConfig.MAX_API_TOKEN)
     private val speech = SpeechInput(activity)
     private val speaker = Speaker(activity)
@@ -79,9 +80,7 @@ class MaxController(
      * banakar phone mein save kar lete hain. Jab tak save nahi hui, phone ki aawaz mein bolo.
      */
     private suspend fun greet() {
-        val name = settings.userName
-        val text = if (name.isBlank()) "Haan ji, bataiye main aapki kya madad kar sakta hoon?"
-        else "Haan ji $name, bataiye main aapki kya madad kar sakta hoon?"
+        val text = greetingText(profiles.load())
         addMessage(fromUser = false, text = text, saveToHistory = false)
         state = MaxState.Speaking
 
@@ -192,7 +191,7 @@ class MaxController(
         DebugLog.i("Aap: $text")
 
         val launches = mutableListOf<Intent>()
-        var turn = api.chat(sessionId, text)
+        var turn = api.chat(sessionId, text, profiles.load().toServerJson())
         while (turn.status == "needs_action") {
             val results = JSONArray()
             for (action in turn.actions) {
@@ -263,6 +262,20 @@ class MaxController(
     } catch (e: Exception) {
         DebugLog.e("Natural aawaz nahi mili, phone ki aawaz use kar raha hoon", e)
         null
+    }
+
+    /** "Hello Max" ka jawab — naam, Aap/Tum aur birthday ke hisaab se. (Emoji nahi, ye bola jaata hai.) */
+    private fun greetingText(p: Profile): String {
+        val name = p.displayName
+        val casual = p.addressStyle == "tum"
+        return when {
+            p.isBirthday() && casual -> "Happy Birthday $name! Bolo, aaj tumhare liye kya karun?"
+            p.isBirthday() -> "Happy Birthday $name! Bataiye, aaj main aapke liye kya kar sakta hoon?"
+            casual && name.isNotBlank() -> "Haan $name, bolo kya madad karun?"
+            casual -> "Haan, bolo kya madad karun?"
+            name.isNotBlank() -> "Haan ji $name, bataiye main aapki kya madad kar sakta hoon?"
+            else -> "Haan ji, bataiye main aapki kya madad kar sakta hoon?"
+        }
     }
 
     private fun addMessage(fromUser: Boolean, text: String, saveToHistory: Boolean = true) {

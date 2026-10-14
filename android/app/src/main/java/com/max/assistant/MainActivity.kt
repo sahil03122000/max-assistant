@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         controller = MaxController(this, lifecycleScope)
         requestMissingPermissions()
+        // Phone restart hone par alarm mit jaate hain — app khulte hi birthday wish phir se set.
+        Reminders.scheduleBirthday(this)
         setContent {
             MaxTheme {
                 MaxScreen(controller, onWakeWordChange = ::setWakeWord)
@@ -151,14 +153,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, History, Log }
+private enum class Screen { Chat, History, Log, Profile, Welcome }
 
 @Composable
 private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> Unit) {
-    var screen by remember { mutableStateOf(Screen.Chat) }
+    // Pehli baar (profile khaali) → seedha "Namaste" profile page.
+    var screen by remember {
+        mutableStateOf(if (controller.profiles.load().isEmpty) Screen.Welcome else Screen.Chat)
+    }
     var showSettings by remember { mutableStateOf(false) }
 
     when (screen) {
+        Screen.Welcome, Screen.Profile -> {
+            ProfileScreen(controller.profiles, firstTime = screen == Screen.Welcome, onDone = { screen = Screen.Chat })
+            return
+        }
         Screen.Log -> {
             LogScreen(onClose = { screen = Screen.Chat })
             return
@@ -181,6 +190,7 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("Max", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.weight(1f))
+                TextButton(onClick = { screen = Screen.Profile }) { Text("👤") }
                 TextButton(onClick = { screen = Screen.History }) { Text("History") }
                 TextButton(onClick = { screen = Screen.Log }) { Text("Log") }
                 TextButton(onClick = { showSettings = true }) { Text("Settings") }
@@ -353,7 +363,6 @@ private fun SettingsDialog(
     var language by remember { mutableStateOf(settings.language) }
     var voice by remember { mutableStateOf(settings.voice) }
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
-    var userName by remember { mutableStateOf(settings.userName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -373,13 +382,6 @@ private fun SettingsDialog(
                     }
                     Switch(checked = wakeWord, onCheckedChange = { wakeWord = it })
                 }
-                OutlinedTextField(
-                    value = userName,
-                    onValueChange = { userName = it },
-                    label = { Text("Aapka naam") },
-                    supportingText = { Text("\"Haan ji $userName, bataiye...\"") },
-                    singleLine = true,
-                )
                 Text("Max ki aawaz (naam par tap = sunao)", style = MaterialTheme.typography.labelLarge)
                 Settings.VOICES.forEach { (id, label) ->
                     Row(
@@ -423,7 +425,6 @@ private fun SettingsDialog(
                 settings.serverUrl = url
                 settings.language = language
                 settings.voice = voice
-                settings.userName = userName
                 if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
                 onDismiss()
             }) { Text("Save") }

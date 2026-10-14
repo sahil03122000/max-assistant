@@ -33,15 +33,27 @@ app.use("/v1", (req, _res, next) => {
   next();
 });
 
+const short = z.string().trim().max(200).optional();
+const ProfileBody = z.object({
+  callingName: z.string().trim().max(60).optional(),
+  gender: z.enum(["male", "female", "unspecified"]).optional(),
+  addressStyle: z.enum(["aap", "tum"]).optional(),
+  city: short,
+  profession: short,
+  interests: z.string().trim().max(500).optional(),
+  birthdayToday: z.boolean().optional(),
+});
+
 const ChatBody = z.object({
   sessionId: z.string().min(1).max(100),
   message: z.string().trim().min(1).max(2000),
+  profile: ProfileBody.optional(),
 });
 
 app.post("/v1/chat", async (req, res) => {
   const body = ChatBody.parse(req.body);
   console.log(`🗣️  ${body.message}`);
-  res.json(logTurn(await handleUserMessage(getSession(DEFAULT_USER, body.sessionId), body.message)));
+  res.json(logTurn(await handleUserMessage(getSession(DEFAULT_USER, body.sessionId), body.message, body.profile)));
 });
 
 const ActionsBody = z.object({
