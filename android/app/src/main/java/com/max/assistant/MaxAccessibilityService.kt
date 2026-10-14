@@ -118,11 +118,17 @@ class MaxAccessibilityService : AccessibilityService() {
      * Pehla element jiske text / description / id mein koi [keywords] ho (chhote-bade akshar se farak nahi).
      * [exclude] wale shabd ho to chhod do (jaise "photo" mode tab vs shutter).
      */
-    fun find(keywords: List<String>, exclude: List<String> = emptyList()): AccessibilityNodeInfo? =
-        allNodes().firstOrNull { node ->
-            val label = label(node)
-            label.isNotEmpty() && keywords.any { label.contains(it) } && exclude.none { label.contains(it) }
+    fun find(keywords: List<String>, exclude: List<String> = emptyList()): AccessibilityNodeInfo? {
+        val nodes = allNodes()
+        // [keywords] priority order mein: pehle shabd ka match pehle (jaise "shutter_button" > "capture").
+        for (keyword in keywords) {
+            nodes.firstOrNull { node ->
+                val label = label(node)
+                label.contains(keyword) && exclude.none { label.contains(it) }
+            }?.let { return it }
         }
+        return null
+    }
 
     fun label(node: AccessibilityNodeInfo): String =
         listOfNotNull(node.text, node.contentDescription, node.viewIdResourceName?.substringAfterLast('/'))

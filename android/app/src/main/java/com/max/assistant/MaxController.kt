@@ -15,7 +15,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -72,8 +76,7 @@ class MaxController(
     fun onWake(quick: Boolean = false) {
         start {
             if (!quick) greet()
-            beep() // "ab bolo" ka ishaara
-            listenAndHandle(inConversation = true)
+            listenAndHandle(inConversation = true) // mic taiyaar hote hi "ab bolo" beep
         }
     }
 
@@ -181,7 +184,7 @@ class MaxController(
      * [inConversation]: Max ne khud baat shuru ki ("Hello Max" / sawaal poocha). Tab user chup rahe to
      * Max seedha band nahi hota — pehle ek baar poochhta hai, phir bhi chup to pyaar se alvida.
      */
-    private suspend fun listenAndHandle(inConversation: Boolean = false, silentTries: Int = 0) {
+    private suspend fun listenAndHandle(inConversation: Boolean = false, silentTries: Int = 0, beepWhenReady: Boolean = true) {
         if (!speech.isAvailable()) {
             say("Is phone par speech recognition available nahi hai. Google app install ya update karo.")
             return
@@ -189,7 +192,12 @@ class MaxController(
         // Wake word service ko mic chhodne ka thoda time do.
         if (WakeWordService.isRunning) delay(300)
         state = MaxState.Listening
-        val text = speech.listen(settings.language, onLevel = { micLevel = it }) { partialText = Hinglish.romanize(it) }
+        val text = speech.listen(
+            settings.language,
+            onLevel = { micLevel = it },
+            // Beep tabhi jab mic sach mein sun raha ho — pehle bajne se user ke shuru ke shabd kat jaate the.
+            onReady = { if (beepWhenReady) beepNow() },
+        ) { partialText = Hinglish.romanize(it) }
         micLevel = 0f
         partialText = ""
         if (text.isNullOrBlank()) {
@@ -200,7 +208,6 @@ class MaxController(
             val casual = p.addressStyle == "tum"
             if (silentTries == 0) {
                 sayOnly(if (casual) "${name}sun rahe ho? Kuch chahiye toh bolo." else "${name}aap wahan hain? Kuch chahiye toh bataiye.")
-                beep()
                 listenAndHandle(inConversation = true, silentTries = 1)
             } else {
                 sayOnly(if (casual) "Theek hai, zaroorat ho toh 'Hello Max' bol dena." else "Theek hai, zaroorat ho toh 'Hello Max' boliye.")
@@ -241,7 +248,19 @@ class MaxController(
 
         val launches = mutableListOf<Intent>()
         val afterLaunches = mutableListOf<() -> Unit>()
-        var turn = api.chat(sessionId, text, profiles.load().toServerJson())
+        var turn = if (!fromVoice) {
+            api.chat(sessionId, text, profiles.load().toServerJson())
+        } else {
+            // Max soch raha hai tab bhi suno — user ne baat badli ("nahi, 10 minute ka") to wahi nayi baat.
+            when (val race = chatOrCorrection(text)) {
+                is ChatRace.Reply -> race.turn
+                is ChatRace.Correction -> {
+                    DebugLog.i("✏️ Sochte waqt nayi baat: ${race.text}")
+                    handle(race.text, fromVoice = true)
+                    return
+                }
+            }
+        }
         while (turn.status == "needs_action") {
             val results = JSONArray()
             for (action in turn.actions) {
@@ -264,7 +283,6 @@ class MaxController(
         if (interrupted) {
             // User ne "stop" bola — call/app bhi mat kholo, bas agli baat suno (chup rahe to chupchap band).
             DebugLog.i("Rok diya — ${launches.size} kaam cancel")
-            beep()
             listenAndHandle()
             return
         }
@@ -303,7 +321,10 @@ class MaxController(
         interrupted = false
         state = MaxState.Speaking
         // Bolte waqt "Max stop" / "ruko" suno, taaki user beech mein rok sake.
-        val bargeIn = WakeWordService.sharedModel?.let { model -> BargeInListener(model) { interrupt() } }
+        // "Max" bol ke bhi rok sakte ho — bas tab nahi jab Max khud apna naam bol raha ho.
+        val bargeIn = WakeWordService.sharedModel?.let { model ->
+            BargeInListener(model, allowName = !text.contains("max", ignoreCase = true)) { interrupt() }
+        }
         bargeIn?.start()
         try {
             if (wav != null) {
@@ -397,13 +418,44 @@ class MaxController(
         }
     }
 
-    private suspend fun beep() {
-        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
-        try {
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
-            delay(200)
-        } finally {
-            tone.release()
+    private sealed interface ChatRace {
+        class Reply(val turn: MaxApi.Turn) : ChatRace
+        class Correction(val text: String) : ChatRace
+    }
+
+    /** Server se jawab ka intezaar karte hue mic bhi chalu — jo pehle aaye. */
+    private suspend fun chatOrCorrection(text: String): ChatRace = coroutineScope {
+        val call = async { api.chat(sessionId, text, profiles.load().toServerJson()) }
+        val listen = async {
+            delay(600) // user ki pichhli baat ki goonj khatam hone do
+            while (isActive) {
+                val heard = try {
+                    speech.listen(settings.language) {}
+                } catch (e: SpeechInput.SpeechException) {
+                    delay(500)
+                    null
+                }
+                if (!heard.isNullOrBlank()) return@async Hinglish.romanize(heard)
+            }
+            ""
+        }
+        select {
+            call.onAwait { turn ->
+                listen.cancel()
+                ChatRace.Reply(turn)
+            }
+            listen.onAwait { heard ->
+                call.cancel()
+                ChatRace.Correction(heard)
+            }
         }
     }
+
+    /** "Ab bolo" beep — bina ruke (mic taiyaar hote hi callback se bajta hai). */
+    private fun beepNow() {
+        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ tone.release() }, 300)
+    }
+
 }

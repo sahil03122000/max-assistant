@@ -71,13 +71,15 @@ export function handleActionResults(session: Session, results: ActionResult[]): 
   });
 }
 
-// Ek session par ek time pe ek hi request. Error aaye to history wapas pehle jaisi kar do,
-// taaki adhoori baat-cheet se agli request kharab na ho.
+// Ek session par ek time pe ek hi kaam — nayi baat aaye (user ne sochte waqt baat badli) to mana nahi,
+// line mein lago: pichhla khatam hote hi nayi chalegi (aur use pichhli baat bhi history mein dikhegi).
+// Error aaye to history wapas pehle jaisi, taaki adhoori baat-cheet se agli request kharab na ho.
 async function withSessionLock(session: Session, fn: () => Promise<TurnResult>): Promise<TurnResult> {
-  // Pichhla kaam 90 sec se zyada atka hai to use mara hua maan lo — warna session hamesha ke liye lock.
-  if (session.busy && Date.now() - session.busySince < STALE_LOCK_MS) {
-    throw new HttpError(409, "Max abhi pichhli baat process kar raha hai");
-  }
+  const previous = session.lock;
+  let release!: () => void;
+  session.lock = new Promise<void>((r) => (release = r));
+  // Pichhla kaam atak gaya ho to zyada se zyada 90 sec ruko — warna session hamesha ke liye ruk jaata.
+  await Promise.race([previous, new Promise((r) => setTimeout(r, STALE_LOCK_MS))]);
   session.busy = true;
   session.busySince = Date.now();
   const historyLength = session.history.length;
@@ -90,6 +92,7 @@ async function withSessionLock(session: Session, fn: () => Promise<TurnResult>):
     throw err;
   } finally {
     session.busy = false;
+    release();
   }
 }
 

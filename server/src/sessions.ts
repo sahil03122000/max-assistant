@@ -34,6 +34,8 @@ export interface Session {
   pending: PendingSlot[] | null;
   busy: boolean;
   busySince: number;
+  /** Chal rahe kaam ka promise — nayi request iske khatam hone tak line mein rukti hai. */
+  lock: Promise<void>;
   updatedAt: number;
   profile?: UserProfile;
 }
@@ -46,7 +48,7 @@ export function getSession(userId: string, sessionId: string): Session {
   const key = `${userId}:${sessionId}`;
   let session = sessions.get(key);
   if (!session) {
-    session = { key, userId, history: [], pending: null, busy: false, busySince: 0, updatedAt: Date.now() };
+    session = { key, userId, history: [], pending: null, busy: false, busySince: 0, lock: Promise.resolve(), updatedAt: Date.now() };
     sessions.set(key, session);
   }
   session.updatedAt = Date.now();

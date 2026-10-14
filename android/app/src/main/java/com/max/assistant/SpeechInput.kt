@@ -29,7 +29,13 @@ class SpeechInput(private val context: Context) {
      * Ek baar sunta hai. Kuch samajh na aaye / user chup rahe to null.
      * [onLevel] mic ki aawaz ka level deta hai (0 = chup, 1 = zor se) — animation ke liye.
      */
-    suspend fun listen(languageTag: String, onLevel: (Float) -> Unit = {}, onPartial: (String) -> Unit): String? =
+    suspend fun listen(
+        languageTag: String,
+        onLevel: (Float) -> Unit = {},
+        /** Mic sach mein taiyaar — "ab bolo" beep yahin bajao, warna shuru ke shabd kat jaate hain. */
+        onReady: () -> Unit = {},
+        onPartial: (String) -> Unit,
+    ): String? =
         suspendCancellableCoroutine { cont ->
             val r = SpeechRecognizer.createSpeechRecognizer(context)
             recognizer = r
@@ -59,7 +65,7 @@ class SpeechInput(private val context: Context) {
                     }
                 }
 
-                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onReadyForSpeech(params: Bundle?) = onReady()
                 override fun onBeginningOfSpeech() {}
                 // rmsdB lagbhag -2 (chup) se 10 (zor se) tak aata hai.
                 override fun onRmsChanged(rmsdB: Float) = onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
@@ -73,6 +79,9 @@ class SpeechInput(private val context: Context) {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                // Thoda rukne par hi baat khatam na maano (adhoora sunna) — ~2 sec chup rehne par khatam.
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             }
             r.startListening(intent)
 

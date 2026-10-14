@@ -67,10 +67,21 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
         return false
     }
 
-    /** Selfie ke liye front camera — 2 sec mein chehra na dikhe to "switch camera" dabao. */
+    /** Selfie ke liye front camera. */
     private suspend fun ensureFrontCamera(voice: MaxVoice) {
-        if (faceVisible()) return
         val switch = service.find(SWITCH_WORDS, exclude = listOf("video"))
+        val label = switch?.let { service.label(it) }.orEmpty()
+        // Kai camera apps (jaise OnePlus) switch button par abhi ka camera likhte hain: "rear camera" / "front camera".
+        when {
+            "front" in label -> return
+            "rear" in label || "back" in label -> {
+                DebugLog.i("🔄 Rear se front par switch: '$label'")
+                service.click(switch!!)
+                delay(1500)
+                return
+            }
+        }
+        if (faceVisible()) return
         if (switch != null) {
             DebugLog.i("🔄 Front camera par switch: '${service.label(switch)}'")
             service.click(switch)
@@ -125,7 +136,7 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
 
     private suspend fun pressShutter(): Boolean {
         service.hideHint()
-        val shutter = service.find(SHUTTER_WORDS, exclude = listOf("video", "record", "mode"))
+        val shutter = service.find(SHUTTER_WORDS, exclude = SHUTTER_EXCLUDE)
         if (shutter != null) {
             DebugLog.i("📸 Shutter: '${service.label(shutter)}'")
             return service.click(shutter)
@@ -158,8 +169,10 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
     private companion object {
         const val TIMEOUT_MS = 25_000L
         const val STEADY_SHOTS = 2
-        val SWITCH_WORDS = listOf("switch", "flip", "front", "selfie", "rotate", "lens", "facing", "palat")
-        val SHUTTER_WORDS = listOf("shutter", "take photo", "take picture", "capture", "shoot", "click photo")
+        val SWITCH_WORDS = listOf("switch_camera", "switch camera", "flip", "switch", "facing", "palat")
+        // Priority order. "shoot" jaise dhile shabd nahi — OnePlus mein "interval shooting" button galti se dab gaya tha.
+        val SHUTTER_WORDS = listOf("shutter_button", "shutter", "take photo", "take picture", "capture")
+        val SHUTTER_EXCLUDE = listOf("video", "record", "mode", "interval", "burst", "timer", "setting")
         val LINES = listOf(
             "Chalo selfie lete hain! Camera ki taraf dekho",
             "Perfect! Teen, do, ek",

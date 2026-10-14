@@ -18,7 +18,12 @@ import org.vosk.Recognizer
  * echo canceller, aur grammar sirf kuch stop-shabdon ki (Vosk, offline). "Max" akela stop nahi hai,
  * kyunki Max khud apna naam bolta hai ("Main Max hoon").
  */
-class BargeInListener(private val model: Model, private val onStop: () -> Unit) {
+class BargeInListener(
+    private val model: Model,
+    /** Akela "Max" bolne par bhi roko (user ko kuch aur kehna hai). Max khud apna naam bol raha ho to false. */
+    private val allowName: Boolean = false,
+    private val onStop: () -> Unit,
+) {
     private val main = Handler(Looper.getMainLooper())
     private var thread: Thread? = null
     @Volatile private var running = false
@@ -45,7 +50,8 @@ class BargeInListener(private val model: Model, private val onStop: () -> Unit) 
             } else {
                 null
             }
-            val recognizer = Recognizer(model, SAMPLE_RATE.toFloat(), GRAMMAR)
+            val recognizer = Recognizer(model, SAMPLE_RATE.toFloat(), if (allowName) GRAMMAR_WITH_NAME else GRAMMAR)
+            val stopWords = if (allowName) STOP_WITH_NAME else STOP
             try {
                 record.startRecording()
                 val buffer = ShortArray(bufferSize / 2)
@@ -54,7 +60,7 @@ class BargeInListener(private val model: Model, private val onStop: () -> Unit) 
                     if (n <= 0) continue
                     val heard = if (recognizer.acceptWaveForm(buffer, n)) {
                         // Poora vaakya — koi bhi stop-shabd chalega.
-                        text(recognizer.result, "text").takeIf { STOP.containsMatchIn(it) }
+                        text(recognizer.result, "text").takeIf { stopWords.containsMatchIn(it) }
                     } else {
                         // Adhoora (tez) — sirf pakka "max stop" par, taaki shor par galti se na ruke.
                         text(recognizer.partialResult, "partial").takeIf { it.contains("max stop") }
@@ -88,5 +94,7 @@ class BargeInListener(private val model: Model, private val onStop: () -> Unit) 
         const val SAMPLE_RATE = 16000
         const val GRAMMAR = """["max stop", "stop", "ruko", "bas karo", "chup", "[unk]"]"""
         val STOP = Regex("""\b(stop|ruko|bas karo|chup)\b""")
+        const val GRAMMAR_WITH_NAME = """["max stop", "max", "stop", "ruko", "bas karo", "chup", "[unk]"]"""
+        val STOP_WITH_NAME = Regex("""\b(max|stop|ruko|bas karo|chup)\b""")
     }
 }
