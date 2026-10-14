@@ -156,6 +156,10 @@ class MaxController(
             } catch (e: MaxApi.ServerException) {
                 DebugLog.e("Server: ${e.message}")
                 say(e.message ?: "Server mein dikkat hai")
+            } catch (e: java.net.SocketTimeoutException) {
+                // Server tak pahunch gaye, bas AI ne der kar di — "connect nahi ho raha" bolna galat hota.
+                DebugLog.e("Server ne time par jawab nahi diya", e)
+                say("AI abhi bahut slow chal raha hai, ek baar phir bolo")
             } catch (e: IOException) {
                 DebugLog.e("Server tak nahi pahunch paaye (${settings.serverUrl})", e)
                 say("Server se connect nahi ho pa raha. Laptop par server chal raha hai?")

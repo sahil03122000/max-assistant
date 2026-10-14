@@ -1,7 +1,7 @@
 // Max ki natural aawaz: Gemini TTS text ko insaan jaisi aawaz (WAV) mein badalta hai.
 // Free tier par chalta hai, lekin limit kam hai — fail ho to phone apni offline aawaz use kar leta hai.
 import { ApiError, GoogleGenAI } from "@google/genai";
-import { HttpError } from "./brain.js";
+import { HttpError, isTimeout } from "./brain.js";
 import { config } from "./config.js";
 
 const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
@@ -23,6 +23,7 @@ export async function synthesize(text: string, voice: string): Promise<Buffer> {
         config: {
           responseModalities: ["AUDIO"],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+          abortSignal: AbortSignal.timeout(12_000),
         },
       });
       const audio = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
@@ -34,6 +35,10 @@ export async function synthesize(text: string, voice: string): Promise<Buffer> {
       const rate = Number(mime.match(/rate=(\d+)/)?.[1] ?? 24000);
       return pcmToWav(bytes, rate);
     } catch (err) {
+      if (isTimeout(err)) {
+        console.warn(`  🔇 TTS ${model} slow (12 sec), agla try...`);
+        continue;
+      }
       if (!(err instanceof ApiError)) throw err;
       console.warn(`  🔇 TTS ${model} fail (${err.status}), agla try...`);
     }

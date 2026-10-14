@@ -33,6 +33,7 @@ export interface Session {
   history: Content[];
   pending: PendingSlot[] | null;
   busy: boolean;
+  busySince: number;
   updatedAt: number;
   profile?: UserProfile;
 }
@@ -45,7 +46,7 @@ export function getSession(userId: string, sessionId: string): Session {
   const key = `${userId}:${sessionId}`;
   let session = sessions.get(key);
   if (!session) {
-    session = { key, userId, history: [], pending: null, busy: false, updatedAt: Date.now() };
+    session = { key, userId, history: [], pending: null, busy: false, busySince: 0, updatedAt: Date.now() };
     sessions.set(key, session);
   }
   session.updatedAt = Date.now();

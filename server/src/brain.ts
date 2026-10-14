@@ -19,6 +19,7 @@ import { searchYouTube } from "./youtube.js";
 
 const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
 const MAX_STEPS = 8;
+const STALE_LOCK_MS = 90_000;
 
 export type TurnResult =
   | { status: "done"; reply: string }
@@ -73,8 +74,12 @@ export function handleActionResults(session: Session, results: ActionResult[]): 
 // Ek session par ek time pe ek hi request. Error aaye to history wapas pehle jaisi kar do,
 // taaki adhoori baat-cheet se agli request kharab na ho.
 async function withSessionLock(session: Session, fn: () => Promise<TurnResult>): Promise<TurnResult> {
-  if (session.busy) throw new HttpError(409, "Max abhi pichhli baat process kar raha hai");
+  // Pichhla kaam 90 sec se zyada atka hai to use mara hua maan lo — warna session hamesha ke liye lock.
+  if (session.busy && Date.now() - session.busySince < STALE_LOCK_MS) {
+    throw new HttpError(409, "Max abhi pichhli baat process kar raha hai");
+  }
   session.busy = true;
+  session.busySince = Date.now();
   const historyLength = session.history.length;
   const pending = session.pending;
   try {
@@ -161,13 +166,18 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
       const res = await ai.models.generateContent({
         model,
         contents: history,
-        config: { systemInstruction, tools: [{ functionDeclarations: ALL_TOOLS }] },
+        // Google ka call kabhi atak jaata hai — 15 sec mein jawab na aaye to chhodo, agla model.
+        config: { systemInstruction, tools: [{ functionDeclarations: ALL_TOOLS }], abortSignal: AbortSignal.timeout(15_000) },
       });
       const content = res.candidates?.[0]?.content;
       if (!content?.parts?.length) throw new HttpError(502, "AI ne khaali jawab diya");
       return { role: "model", parts: content.parts };
     } catch (err) {
       lastError = err;
+      if (isTimeout(err)) {
+        console.warn(`  ⌛ ${model} ne 15 sec mein jawab nahi diya, agla model...`);
+        continue;
+      }
       if (!(err instanceof ApiError)) throw err;
       if (err.status === 429) {
         quotaExhausted.add(model);
@@ -184,7 +194,14 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
   if (lastError instanceof ApiError && lastError.status === 429) {
     throw new HttpError(429, "Max abhi thoda busy hai (free limit khatam). Thodi der baad try karo.");
   }
+  if (isTimeout(lastError)) throw new HttpError(504, "AI abhi bahut slow hai, ek baar phir bolo");
   throw new HttpError(502, "AI se baat nahi ho paayi");
+}
+
+/** AbortSignal.timeout se ruka hua call (Node mein TimeoutError / AbortError). */
+export function isTimeout(err: unknown): boolean {
+  const name = (err as { name?: string } | null)?.name;
+  return name === "TimeoutError" || name === "AbortError";
 }
 
 function spokenText(content: Content): string {
