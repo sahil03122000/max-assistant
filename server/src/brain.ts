@@ -12,6 +12,7 @@ import { ApiError, GoogleGenAI, type Content, type FunctionCall, type Part } fro
 import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
 import { groqEnabled, GroqError, groqThink } from "./groq.js";
+import { clarifyMessage } from "./clarify.js";
 import { maskPrivate } from "./privacy.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { trimHistory, type PendingAction, type PendingSlot, type Session, type UserProfile } from "./sessions.js";
@@ -44,7 +45,8 @@ export class HttpError extends Error {
 
 export function handleUserMessage(session: Session, rawText: string, profile?: UserProfile): Promise<TurnResult> {
   if (profile) session.profile = profile;
-  const { text, hidden } = maskPrivate(rawText);
+  const { text: masked, hidden } = maskPrivate(rawText);
+  const text = clarifyMessage(masked);
   if (hidden.length) console.log(`   🔒 private chhupaya: ${hidden.join(", ")}`);
   return withSessionLock(session, () => {
     const parts: Part[] = [];
