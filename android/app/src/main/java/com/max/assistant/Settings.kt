@@ -22,6 +22,14 @@ class Settings(context: Context) {
         get() = prefs.getString("voice", null) ?: "Puck"
         set(value) = prefs.edit { putString("voice", value) }
 
+    /**
+     * Natural aawaz fail ho to phone ki kaunsi (offline) aawaz — taaki ladke se achanak ladki ki aawaz na ho.
+     * Google TTS ke Indian English voice names (Android gender nahi batata, isliye user sun ke chunta hai).
+     */
+    var phoneVoice: String
+        get() = prefs.getString("phone_voice", null) ?: "en-in-x-enc-local"
+        set(value) = prefs.edit { putString("phone_voice", value) }
+
     /** Speech recognition ki bhasha: "hi-IN" (Hindi/Hinglish) ya "en-IN" (English). */
     var language: String
         get() = prefs.getString("language", null) ?: "hi-IN"
@@ -41,6 +49,13 @@ class Settings(context: Context) {
             "Leda" to "Leda — ladki, young",
             "Zephyr" to "Zephyr — ladki, bright",
             PHONE_VOICE to "Phone ki aawaz (offline, fast)",
+        )
+
+        val PHONE_VOICES = listOf(
+            "en-in-x-enc-local" to "Backup aawaz 1",
+            "en-in-x-end-local" to "Backup aawaz 2",
+            "en-in-x-ena-local" to "Backup aawaz 3",
+            "en-in-x-ene-local" to "Backup aawaz 4",
         )
     }
 }

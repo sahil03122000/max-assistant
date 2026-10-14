@@ -105,7 +105,7 @@ class MaxController(
                 }
             }
         }
-        speaker.speak(text)
+        speaker.speak(text, settings.phoneVoice)
     }
 
     fun onTextSubmit(text: String) {
@@ -115,6 +115,14 @@ class MaxController(
     /** Settings mein aawaz chunte waqt sunao kaisi lagti hai. */
     fun previewVoice(voice: String) {
         start { speak("Namaste! Main Max hoon. Batao, aaj kya karna hai?", voice) {} }
+    }
+
+    /** Settings mein backup (phone) aawaz chunte waqt sunao. */
+    fun previewPhoneVoice(name: String) {
+        start {
+            state = MaxState.Speaking
+            speaker.speak("Namaste! Main Max hoon. Batao, aaj kya karna hai?", name)
+        }
     }
 
     fun stop() {
@@ -252,7 +260,7 @@ class MaxController(
                 DebugLog.e("Audio play nahi hua", e)
             }
         }
-        speaker.speak(text)
+        speaker.speak(text, settings.phoneVoice)
     }
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? {

@@ -28,6 +28,8 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) = complete(utteranceId)
             })
+            val indian = tts.voices.orEmpty().filter { it.locale.country == "IN" && it.locale.language in setOf("hi", "en") }
+            DebugLog.i("Phone voices: " + indian.sortedBy { it.name }.joinToString { "${it.name}${if (it.isNetworkConnectionRequired) "(net)" else ""}" })
         } else {
             DebugLog.e("Text-to-speech start nahi hua (status $status)")
         }
@@ -39,12 +41,18 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /** Bolta hai aur bolna khatam hone tak wait karta hai. */
-    suspend fun speak(text: String) {
+    /** [voiceName]: chuni hui phone voice (Settings.phoneVoice) — Roman Hinglish ke liye Indian English voice. */
+    suspend fun speak(text: String, voiceName: String? = null) {
         if (text.isBlank() || !ready.await()) return
         val hindi = text.any { it in 'ऀ'..'ॿ' }
-        val result = tts.setLanguage(Locale.forLanguageTag(if (hindi) "hi-IN" else "en-IN"))
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            DebugLog.e("TTS voice nahi mili (${if (hindi) "hi-IN" else "en-IN"}), default voice use ho rahi hai")
+        val chosen = voiceName?.takeIf { !hindi }?.let { name -> tts.voices.orEmpty().firstOrNull { it.name == name } }
+        if (chosen != null) {
+            tts.voice = chosen
+        } else {
+            val result = tts.setLanguage(Locale.forLanguageTag(if (hindi) "hi-IN" else "en-IN"))
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                DebugLog.e("TTS voice nahi mili (${if (hindi) "hi-IN" else "en-IN"}), default voice use ho rahi hai")
+            }
         }
         val id = UUID.randomUUID().toString()
         val done = CompletableDeferred<Unit>()

@@ -35,7 +35,7 @@ export function buildSystemPrompt(memories: Memory[], now: Date, profile?: UserP
 ## How you speak
 - Your replies are converted to speech. Keep them short: usually 1-2 sentences. No markdown, bullet points, emojis, or URLs.
 - Output ONLY the exact words Max says out loud. Never write your reasoning, analysis, notes about the user's language, or quotes of these instructions.
-- Match the user's language. Default to natural Hinglish written in Roman script (e.g. "Haan, papa ko call laga raha hoon"). If the user speaks pure English or pure Hindi, reply in that.
+- ALWAYS reply in natural Hinglish written in Roman (English) letters, e.g. "Haan, papa ko call laga raha hoon". The user's speech often arrives in Devanagari script (that's just how the phone's speech-to-text writes Hindi) — still reply in Roman Hinglish, never in Devanagari. Only if the user clearly speaks full English sentences, reply in English.
 - Address the user casually and naturally. Don't repeat their request back word-for-word.
 
 ## Doing tasks
@@ -46,7 +46,7 @@ export function buildSystemPrompt(memories: Memory[], now: Date, profile?: UserP
 - Reminders are SPOKEN ALOUD by the phone at that exact time (plus a notification). So "X baje/X minute baad batana", "jab timer mein 1 minute bache tab batana" etc. are always possible: use set_reminder at the computed time (e.g. a 2-minute timer set just now → reminder 1 minute from now). Never say you can't remind during a timer. Write the reminder text as the sentence to say, addressing the user, e.g. "Sahil, timer mein 1 minute bacha hai".
 - Music/videos: if the user names a specific song or video ("Kesariya chalao"), call play_on_youtube directly. If the request is vague (just an artist, mood or genre, like "Arijit Singh ka gaana chalao" or "koi sad song"), first call search_youtube, then offer its 3 options IN THE EXACT ORDER GIVEN (option 1 first) as short, clean song names (drop channel names and junk like "Official Video", "| Lyrics") and ask which one. When the user picks by position ("pehla", "doosra wala", "last wala"), use that option number's video_id. If they pick by name ("Shayad"), match the name. play_on_youtube opens YouTube itself — never also call open_app for YouTube.
 - When you ask the user a question, end your reply with a question mark — the phone then listens again automatically.
-- After finishing a task, add a very short follow-up so the conversation stays open, e.g. "Timer laga diya. Aur kuch?" (vary it naturally; in Hindi script: "...और कुछ?"). Skip the follow-up when you just started a call, opened an app, or started a song/video. If the user says they're done ("nahi", "bas", "thank you", "kuch nahi"), reply with a short friendly goodbye WITHOUT a question mark.
+- After finishing a task, add a very short follow-up so the conversation stays open, e.g. "Timer laga diya. Aur kuch?" (vary it naturally). Skip the follow-up when you just started a call, opened an app, or started a song/video. If the user says they're done ("nahi", "bas", "thank you", "kuch nahi"), reply with a short friendly goodbye WITHOUT a question mark.
 - Anything involving money, payments, or deleting things: always ask for a clear "haan" before doing it.
 - If you can't do something yet (no tool for it), say so honestly in one line.
 

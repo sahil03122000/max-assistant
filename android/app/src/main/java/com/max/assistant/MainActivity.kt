@@ -217,6 +217,7 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
         SettingsDialog(
             controller.settings,
             onPreviewVoice = controller::previewVoice,
+            onPreviewPhoneVoice = controller::previewPhoneVoice,
             onWakeWordChange = onWakeWordChange,
             onDismiss = { showSettings = false },
         )
@@ -363,12 +364,14 @@ private fun TextInput(onSend: (String) -> Unit) {
 private fun SettingsDialog(
     settings: Settings,
     onPreviewVoice: (String) -> Unit,
+    onPreviewPhoneVoice: (String) -> Unit,
     onWakeWordChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var url by remember { mutableStateOf(settings.serverUrl) }
     var language by remember { mutableStateOf(settings.language) }
     var voice by remember { mutableStateOf(settings.voice) }
+    var phoneVoice by remember { mutableStateOf(settings.phoneVoice) }
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -413,6 +416,24 @@ private fun SettingsDialog(
                     label = { Text("Server address") },
                     singleLine = true,
                 )
+                Text("Backup aawaz — jab natural aawaz na mile (tap = sunao)", style = MaterialTheme.typography.labelLarge)
+                Settings.PHONE_VOICES.forEach { (id, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = phoneVoice == id, onClick = {
+                                phoneVoice = id
+                                onPreviewPhoneVoice(id)
+                            }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = phoneVoice == id, onClick = {
+                            phoneVoice = id
+                            onPreviewPhoneVoice(id)
+                        })
+                        Text(label)
+                    }
+                }
                 Text("Sunne ki bhasha", style = MaterialTheme.typography.labelLarge)
                 listOf("hi-IN" to "Hindi / Hinglish", "en-IN" to "English (India)").forEach { (tag, label) ->
                     Row(
@@ -432,6 +453,7 @@ private fun SettingsDialog(
                 settings.serverUrl = url
                 settings.language = language
                 settings.voice = voice
+                settings.phoneVoice = phoneVoice
                 if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
                 onDismiss()
             }) { Text("Save") }
