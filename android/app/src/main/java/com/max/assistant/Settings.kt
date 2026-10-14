@@ -19,7 +19,7 @@ class Settings(context: Context) {
 
     /** Max ki aawaz: server ki natural AI aawaz ka naam (jaise "Puck"), ya [PHONE_VOICE] = phone ki offline aawaz. */
     var voice: String
-        get() = prefs.getString("voice", null) ?: "Puck"
+        get() = prefs.getString("voice", null) ?: "Orus"
         set(value) = prefs.edit { putString("voice", value) }
 
     /**
@@ -56,6 +56,10 @@ class Settings(context: Context) {
             "en-in-x-end-local" to "Backup aawaz 2",
             "en-in-x-ena-local" to "Backup aawaz 3",
             "en-in-x-ene-local" to "Backup aawaz 4",
+            "hi-in-x-hic-local" to "Backup aawaz 5 (Hindi)",
+            "hi-in-x-hid-local" to "Backup aawaz 6 (Hindi)",
+            "hi-in-x-hia-local" to "Backup aawaz 7 (Hindi)",
+            "hi-in-x-hie-local" to "Backup aawaz 8 (Hindi)",
         )
     }
 }

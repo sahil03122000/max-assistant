@@ -84,10 +84,22 @@ class DeviceActions(private val context: Context) {
     private fun withContact(args: JSONObject, block: (Contact) -> Outcome): Outcome {
         val query = args.optString("contact_name").trim()
         if (query.isEmpty()) return Outcome(false, error = "Contact ka naam nahi mila")
-        val matches = findContacts(query)
+        val all = loadContacts()
+        val matchedNames = NameMatcher.match(query, all.map { it.name }.distinct()).toSet()
+        val matches = all.filter { it.name in matchedNames }
+            .distinctBy { it.name.lowercase() to it.number.filter(Char::isDigit).takeLast(10) }
         val names = matches.map { it.name }.distinct()
         return when {
-            matches.isEmpty() -> Outcome(false, error = "'$query' naam ka koi contact phone mein nahi mila")
+            matches.isEmpty() -> {
+                // Insaan ki tarah madad: "A se Abhishek, Aman, Ankit hain — kisko?"
+                val similar = NameMatcher.suggest(query, all.map { it.name })
+                Outcome(
+                    false,
+                    error = if (similar.isEmpty()) "'$query' naam ka koi contact phone mein nahi mila"
+                    else "'$query' naam ka koi contact nahi mila. Milte-julte contacts: ${similar.joinToString()}. " +
+                        "User ko ye naam batao aur poocho kisko.",
+                )
+            }
             names.size > 1 -> Outcome(
                 false,
                 error = "'$query' se ${names.size} contacts mile: ${names.take(5).joinToString()}. User se poocho kaunsa.",
@@ -96,7 +108,7 @@ class DeviceActions(private val context: Context) {
         }
     }
 
-    private fun findContacts(query: String): List<Contact> {
+    private fun loadContacts(): List<Contact> {
         requirePermission(Manifest.permission.READ_CONTACTS, "Contacts padhne ki permission nahi di gayi hai")
         val all = mutableListOf<Contact>()
         context.contentResolver.query(
@@ -108,11 +120,7 @@ class DeviceActions(private val context: Context) {
                 all += Contact(name.trim(), number)
             }
         }
-        val q = query.lowercase()
-        // Pehle exact naam ("Papa"), na mile to naam ke andar ("Papa Ji", "Rahul Sharma").
-        val exact = all.filter { it.name.lowercase() == q }
-        val matches = exact.ifEmpty { all.filter { it.name.lowercase().contains(q) } }
-        return matches.distinctBy { it.name.lowercase() to it.number.filter(Char::isDigit).takeLast(10) }
+        return all
     }
 
     /** WhatsApp ko country code ke saath number chahiye: 98765 43210 → 919876543210 */

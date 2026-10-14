@@ -71,7 +71,7 @@ class MaxController(
         start {
             greet()
             beep() // "ab bolo" ka ishaara
-            listenAndHandle()
+            listenAndHandle(inConversation = true)
         }
     }
 
@@ -171,7 +171,11 @@ class MaxController(
         }
     }
 
-    private suspend fun listenAndHandle() {
+    /**
+     * [inConversation]: Max ne khud baat shuru ki ("Hello Max" / sawaal poocha). Tab user chup rahe to
+     * Max seedha band nahi hota — pehle ek baar poochhta hai, phir bhi chup to pyaar se alvida.
+     */
+    private suspend fun listenAndHandle(inConversation: Boolean = false, silentTries: Int = 0) {
         if (!speech.isAvailable()) {
             say("Is phone par speech recognition available nahi hai. Google app install ya update karo.")
             return
@@ -184,9 +188,25 @@ class MaxController(
         partialText = ""
         if (text.isNullOrBlank()) {
             DebugLog.i("Kuch sunai nahi diya")
+            if (!inConversation) return
+            val p = profiles.load()
+            val name = p.displayName.let { if (it.isBlank()) "" else "$it, " }
+            val casual = p.addressStyle == "tum"
+            if (silentTries == 0) {
+                sayOnly(if (casual) "${name}sun rahe ho? Kuch chahiye toh bolo." else "${name}aap wahan hain? Kuch chahiye toh bataiye.")
+                beep()
+                listenAndHandle(inConversation = true, silentTries = 1)
+            } else {
+                sayOnly(if (casual) "Theek hai, zaroorat ho toh 'Hello Max' bol dena." else "Theek hai, zaroorat ho toh 'Hello Max' boliye.")
+            }
             return
         }
         handle(text, fromVoice = true)
+    }
+
+    /** Bolo aur dikhao, lekin history mein save mat karo ("aap wahan hain?" jaisi baatein). */
+    private suspend fun sayOnly(text: String) {
+        speak(text, settings.voice) { addMessage(fromUser = false, text = text, saveToHistory = false) }
     }
 
     private suspend fun handle(rawText: String, fromVoice: Boolean) {
@@ -230,7 +250,7 @@ class MaxController(
 
         // Max ne sawaal poocha ("Kaunsa gaana chalaun?") — bina button dabaye jawab suno.
         if (fromVoice && launches.isEmpty() && turn.reply.trim().endsWith("?")) {
-            listenAndHandle()
+            listenAndHandle(inConversation = true)
         }
     }
 
