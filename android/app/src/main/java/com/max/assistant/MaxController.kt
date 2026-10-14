@@ -199,10 +199,16 @@ class MaxController(
                 ""
             }
             DebugLog.i("🎙️ Beech mein suna: '$heard'")
-            if (heard.isNotBlank() && !justInterrupt.matches(heard)) {
+            // Safety: beech wali baat tabhi command jab Max ne sawaal poocha tha (user jawab de raha hai) ya
+            // user ne "Max..." bola — warna TV/shor/AI ki galti se kaam ho sakta tha. Max ki apni goonj bhi ignore.
+            val answeringQuestion = lastSpokenText.trim().endsWith("?")
+            val addressedMax = heard.lowercase().startsWith("max")
+            val isEcho = wordOverlap(heard, lastSpokenText) > 0.6
+            if (heard.isNotBlank() && !justInterrupt.matches(heard) && (answeringQuestion || addressedMax) && !isEcho) {
                 handle(heard, fromVoice = true)
                 return
             }
+            if (isEcho) DebugLog.i("Ye Max ki apni goonj thi — ignore")
         }
         if (!speech.isAvailable()) {
             say("Is phone par speech recognition available nahi hai. Google app install ya update karo.")
@@ -338,6 +344,7 @@ class MaxController(
         val wav = if (voice == Settings.PHONE_VOICE) null else fetchVoice(text, voice)
         onStart()
         interrupted = false
+        lastSpokenText = text
         state = MaxState.Speaking
         // Bolte waqt "Max stop" / "ruko" suno, taaki user beech mein rok sake.
         // "Max" bol ke bhi rok sakte ho — bas tab nahi jab Max khud apna naam bol raha ho.
@@ -376,6 +383,17 @@ class MaxController(
             }
             withContext(Dispatchers.IO) { bargeIn?.stop() }
         }
+    }
+
+    /** Max ne aakhri baar kya bola tha (beech wali baat goonj hai ya jawab — ye jaanne ke liye). */
+    @Volatile private var lastSpokenText = ""
+
+    /** Kitne % shabd [a] ke [b] mein bhi hain (0..1). */
+    private fun wordOverlap(a: String, b: String): Double {
+        val wordsA = a.lowercase().split(Regex("\\W+")).filter { it.length > 1 }
+        if (wordsA.isEmpty()) return 0.0
+        val wordsB = b.lowercase().split(Regex("\\W+")).toSet()
+        return wordsA.count { it in wordsB }.toDouble() / wordsA.size
     }
 
     /** Max ke bolte waqt user ne jo bola (recording) — agla [listenAndHandle] mic ki jagah isse kaam lega. */
