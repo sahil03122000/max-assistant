@@ -203,6 +203,9 @@ private fun AssistantSheet(controller: MaxController, onDismiss: () -> Unit) {
                 if (state == MaxState.Idle && wasActive) {
                     TextButton(onClick = controller::onMicTap) { Text("🎙  Phir se bolo") }
                 }
+                if (state == MaxState.Speaking) {
+                    TextButton(onClick = controller::interrupt) { Text("⏹  Ruko") }
+                }
                 // ✕ = Max ko sula do: phir sirf "Hello Max" par jaagega (sirf "Max" par nahi).
                 TextButton(onClick = {
                     WakeWordService.endSession()

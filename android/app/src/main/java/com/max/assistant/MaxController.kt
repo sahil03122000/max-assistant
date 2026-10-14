@@ -61,6 +61,7 @@ class MaxController(
     private val sessionId = UUID.randomUUID().toString()
     private var job: Job? = null
     private var currentRun = 0
+    @Volatile private var interrupted = false
 
     fun onMicTap() {
         if (state == MaxState.Idle) start { listenAndHandle() } else stop()
@@ -252,7 +253,15 @@ class MaxController(
             turn = api.sendResults(sessionId, results)
         }
 
+        interrupted = false
         say(turn.reply)
+        if (interrupted) {
+            // User ne "stop" bola — call/app bhi mat kholo, bas agli baat suno (chup rahe to chupchap band).
+            DebugLog.i("Rok diya — ${launches.size} kaam cancel")
+            beep()
+            listenAndHandle()
+            return
+        }
         // Call/WhatsApp/app Max ke bolne ke baad kholo.
         for (intent in launches) {
             try {
@@ -284,18 +293,34 @@ class MaxController(
         state = MaxState.Thinking
         val wav = if (voice == Settings.PHONE_VOICE) null else fetchVoice(text, voice)
         onStart()
+        interrupted = false
         state = MaxState.Speaking
-        if (wav != null) {
-            try {
-                voicePlayer.play(wav)
-                return
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                DebugLog.e("Audio play nahi hua", e)
+        // Bolte waqt "Max stop" / "ruko" suno, taaki user beech mein rok sake.
+        val bargeIn = WakeWordService.sharedModel?.let { model -> BargeInListener(model) { interrupt() } }
+        bargeIn?.start()
+        try {
+            if (wav != null) {
+                try {
+                    voicePlayer.play(wav)
+                    return
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    DebugLog.e("Audio play nahi hua", e)
+                }
             }
+            if (!interrupted) speaker.speak(text, settings.phoneVoice)
+        } finally {
+            withContext(Dispatchers.IO) { bargeIn?.stop() }
         }
-        speaker.speak(text, settings.phoneVoice)
+    }
+
+    /** User ne Max ko bolte-bolte roka ("Max stop" ya "Ruko" button). */
+    fun interrupt() {
+        if (state != MaxState.Speaking) return
+        interrupted = true
+        voicePlayer.stop()
+        speaker.stop()
     }
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? {

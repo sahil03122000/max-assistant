@@ -81,6 +81,9 @@ class WakeWordService : Service(), RecognitionListener {
         @Volatile
         private var sessionTouchedAt = 0L
 
+        /** Load hua offline model — Max ke bolte waqt "Max stop" sunne ([BargeInListener]) ke liye bhi. */
+        val sharedModel: Model? get() = instance?.model
+
         fun touchSession() {
             if (sessionActive) sessionTouchedAt = SystemClock.elapsedRealtime()
         }

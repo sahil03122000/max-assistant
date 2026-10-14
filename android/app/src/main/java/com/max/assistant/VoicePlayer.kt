@@ -13,6 +13,8 @@ import kotlin.coroutines.resumeWithException
 /** Server se aayi natural aawaz (WAV) bajata hai aur khatam hone tak wait karta hai. */
 class VoicePlayer(private val context: Context) {
     private var player: MediaPlayer? = null
+    // Beech mein [stop] ho (user ne "Max stop" bola) to play() wala intezaar bhi khatam ho.
+    private var onStopped: (() -> Unit)? = null
 
     suspend fun play(wav: ByteArray) {
         val file = File(context.cacheDir, "max_voice.wav")
@@ -21,6 +23,7 @@ class VoicePlayer(private val context: Context) {
         suspendCancellableCoroutine { cont ->
             val mp = MediaPlayer()
             player = mp
+            onStopped = { if (cont.isActive) cont.resume(Unit) }
             fun release() {
                 if (player === mp) player = null
                 mp.release()
@@ -58,5 +61,7 @@ class VoicePlayer(private val context: Context) {
             it.release()
         }
         player = null
+        onStopped?.invoke()
+        onStopped = null
     }
 }
