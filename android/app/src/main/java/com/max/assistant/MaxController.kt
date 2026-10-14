@@ -89,31 +89,22 @@ class MaxController(
      */
     private suspend fun greet() {
         val text = greetingText(profiles.load())
-        addMessage(fromUser = false, text = text, saveToHistory = false)
-        state = MaxState.Speaking
-
         val voice = settings.voice
         val cached = File(activity.cacheDir, "greeting_${voice}_${text.hashCode()}.wav")
         val naturalOk = voice != Settings.PHONE_VOICE && System.currentTimeMillis() >= naturalVoiceDownUntil
-        if (naturalOk && cached.exists()) {
-            try {
-                voicePlayer.play(withContext(Dispatchers.IO) { cached.readBytes() })
-                return
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                DebugLog.e("Greeting play nahi hui", e)
-            }
-        }
-        if (naturalOk) {
+        val wav = if (naturalOk && cached.exists()) withContext(Dispatchers.IO) { runCatching { cached.readBytes() }.getOrNull() } else null
+        if (naturalOk && wav == null) {
             // Agli baar ke liye natural aawaz background mein bana kar rakh lo.
             scope.launch {
-                fetchVoice(text, voice)?.let { wav ->
-                    withContext(Dispatchers.IO) { runCatching { cached.writeBytes(wav) } }
+                fetchVoice(text, voice)?.let { fetched ->
+                    withContext(Dispatchers.IO) { runCatching { cached.writeBytes(fetched) } }
                 }
             }
         }
-        speaker.speak(text, settings.phoneVoice)
+        // speak() se bajao (fetch nahi) — taaki greeting ke beech user apni baat shuru kare to wo bhi pakdi jaaye.
+        speak(text, voice, preloaded = wav, allowFetch = false) {
+            addMessage(fromUser = false, text = text, saveToHistory = false)
+        }
     }
 
     fun onTextSubmit(text: String) {
@@ -341,9 +332,17 @@ class MaxController(
      * Pehle natural (server) aawaz try karo; na mile ya slow ho to phone ki offline aawaz.
      * [onStart] tab chalta hai jab bolna shuru hone wala ho — tabhi message screen par aata hai.
      */
-    private suspend fun speak(text: String, voice: String, onStart: () -> Unit) {
+    private suspend fun speak(
+        text: String,
+        voice: String,
+        /** Pehle se taiyaar aawaz (jaise saved greeting). */
+        preloaded: ByteArray? = null,
+        /** false = natural aawaz server se mat mangao (na ho to seedha phone ki aawaz). */
+        allowFetch: Boolean = true,
+        onStart: () -> Unit,
+    ) {
         state = MaxState.Thinking
-        val wav = if (voice == Settings.PHONE_VOICE) null else fetchVoice(text, voice)
+        val wav = preloaded ?: if (voice == Settings.PHONE_VOICE || !allowFetch) null else fetchVoice(text, voice)
         onStart()
         interrupted = false
         lastSpokenText = text

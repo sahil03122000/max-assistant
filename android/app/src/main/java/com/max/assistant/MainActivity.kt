@@ -468,8 +468,8 @@ private fun SettingsDialog(
                 }
                 Text("Sunne ki bhasha", style = MaterialTheme.typography.labelLarge)
                 listOf(
-                    "en-IN" to "Hinglish — Roman mein likhta hai (recommended)",
-                    "hi-IN" to "Hindi — zyada sahi sunta hai, likhai Roman mein badal di jaati hai",
+                    "hi-IN" to "Hindi / Hinglish — sabse sahi sunta hai, likhai Roman mein (recommended)",
+                    "en-IN" to "English — Hindi shabd (haan, nahi) kam samajhta hai",
                 ).forEach { (tag, label) ->
                     Row(
                         Modifier

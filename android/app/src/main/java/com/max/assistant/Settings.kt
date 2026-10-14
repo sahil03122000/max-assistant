@@ -40,7 +40,7 @@ class Settings(context: Context) {
 
     /** Speech recognition ki bhasha: "hi-IN" (Hindi/Hinglish) ya "en-IN" (English). */
     var language: String
-        get() = prefs.getString("language", null) ?: "en-IN"
+        get() = prefs.getString("language", null) ?: "hi-IN"
         set(value) = prefs.edit { putString("language", value) }
 
     companion object {
