@@ -1,6 +1,8 @@
 package com.max.assistant
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.CompletableDeferred
@@ -14,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Devanagari text ho to Hindi voice, warna Indian-English voice (Roman Hinglish ke liye theek lagti hai).
  */
 class Speaker(context: Context) : TextToSpeech.OnInitListener {
+    private val connectivity = context.applicationContext.getSystemService(ConnectivityManager::class.java)
     private val ready = CompletableDeferred<Boolean>()
     private val pending = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     private val tts = TextToSpeech(context.applicationContext, this)
@@ -41,11 +44,18 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /** Bolta hai aur bolna khatam hone tak wait karta hai. */
-    /** [voiceName]: chuni hui phone voice (Settings.phoneVoice) — Roman Hinglish ke liye Indian English voice. */
+    /**
+     * [voiceName]: chuni hui phone voice (Settings.phoneVoice) — Roman Hinglish ke liye Indian English voice.
+     * Internet ho to uska "-network" roop (Google ki zyada natural, free aawaz), warna "-local" (offline).
+     */
     suspend fun speak(text: String, voiceName: String? = null) {
         if (text.isBlank() || !ready.await()) return
         val hindi = text.any { it in 'ऀ'..'ॿ' }
-        val chosen = voiceName?.takeIf { !hindi }?.let { name -> tts.voices.orEmpty().firstOrNull { it.name == name } }
+        val voices = tts.voices.orEmpty()
+        val preferred = voiceName?.let { if (isOnline()) it.replace("-local", "-network") else it.replace("-network", "-local") }
+        val chosen = voiceName?.takeIf { !hindi }?.let { name ->
+            voices.firstOrNull { it.name == preferred } ?: voices.firstOrNull { it.name == name }
+        }
         if (chosen != null) {
             tts.voice = chosen
         } else {
@@ -72,4 +82,8 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
         stop()
         tts.shutdown()
     }
+
+    private fun isOnline(): Boolean =
+        connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 }

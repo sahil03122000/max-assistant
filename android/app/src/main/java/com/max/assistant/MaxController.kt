@@ -324,6 +324,12 @@ class MaxController(
     }
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? {
+        // Pehle bola hua vaakya? Save ki hui aawaz — free limit bhi bachti hai aur turant bajta hai.
+        val cached = File(voiceCacheDir, "${voice}_${text.trim().lowercase().hashCode()}.wav")
+        if (cached.exists()) {
+            withContext(Dispatchers.IO) { cached.setLastModified(System.currentTimeMillis()) }
+            return withContext(Dispatchers.IO) { cached.readBytes() }
+        }
         // Natural aawaz abhi-abhi fail hui thi — kuch der phone ki aawaz hi rakho, taaki ek hi baat-cheet
         // mein aawaz baar-baar na badle (aur har jawab par 8 sec ka intezaar bhi na ho).
         if (System.currentTimeMillis() < naturalVoiceDownUntil) return null
@@ -338,12 +344,23 @@ class MaxController(
         if (wav == null) {
             naturalVoiceDownUntil = System.currentTimeMillis() + NATURAL_VOICE_COOLDOWN_MS
             DebugLog.i("Natural aawaz slow/fail — agle 5 min phone ki aawaz")
+        } else {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    cached.writeBytes(wav)
+                    // Sabse purani hata ke max ~300 vaakya rakho (lagbhag 30-60 MB).
+                    voiceCacheDir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(VOICE_CACHE_MAX)?.forEach { it.delete() }
+                }
+            }
         }
         return wav
     }
 
+    private val voiceCacheDir = File(activity.cacheDir, "voice").apply { mkdirs() }
+
     private companion object {
         const val NATURAL_VOICE_COOLDOWN_MS = 5 * 60 * 1000L
+        const val VOICE_CACHE_MAX = 300
 
         // Static: "Hello Max" panel har baar naya controller banata hai, ye sab mein share hona chahiye.
         @Volatile
