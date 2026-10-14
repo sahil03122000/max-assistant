@@ -190,11 +190,9 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun onWake() {
         pauseListening()
-        val intent = Intent(this, MainActivity::class.java)
-            .setAction(MainActivity.ACTION_WAKE)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         try {
-            startActivity(intent)
+            // Poora app nahi — chalti app ke upar chhota Max panel (Google Assistant jaisa).
+            startActivity(AssistantActivity.intent(this))
         } catch (e: Exception) {
             // "Display over other apps" permission na ho to Android background se screen nahi kholne deta.
             DebugLog.e("Max ki screen nahi khuli — 'Display over other apps' permission do", e)

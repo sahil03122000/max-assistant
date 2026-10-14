@@ -25,8 +25,11 @@ class SpeechInput(private val context: Context) {
 
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
-    /** Ek baar sunta hai. Kuch samajh na aaye / user chup rahe to null. */
-    suspend fun listen(languageTag: String, onPartial: (String) -> Unit): String? =
+    /**
+     * Ek baar sunta hai. Kuch samajh na aaye / user chup rahe to null.
+     * [onLevel] mic ki aawaz ka level deta hai (0 = chup, 1 = zor se) — animation ke liye.
+     */
+    suspend fun listen(languageTag: String, onLevel: (Float) -> Unit = {}, onPartial: (String) -> Unit): String? =
         suspendCancellableCoroutine { cont ->
             val r = SpeechRecognizer.createSpeechRecognizer(context)
             recognizer = r
@@ -58,7 +61,8 @@ class SpeechInput(private val context: Context) {
 
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
+                // rmsdB lagbhag -2 (chup) se 10 (zor se) tak aata hai.
+                override fun onRmsChanged(rmsdB: Float) = onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}

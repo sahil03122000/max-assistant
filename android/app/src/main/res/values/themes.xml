@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.Max" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- "Hello Max" panel: transparent, taaki peeche wali app dikhti rahe -->
+    <style name="Theme.Max.Overlay" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

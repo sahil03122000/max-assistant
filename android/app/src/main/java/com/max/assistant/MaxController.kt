@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.ToneGenerator
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -29,7 +30,15 @@ data class ChatMessage(val fromUser: Boolean, val text: String)
  * Poora flow ek jagah: suno → server se poocho → phone par kaam karo → jawab bolo.
  * React mein jaise ek custom hook state + logic sambhalta hai, waise hi ye class; UI sirf state padhti hai.
  */
-class MaxController(private val activity: Activity, private val scope: CoroutineScope) {
+class MaxController(
+    private val activity: Activity,
+    private val scope: CoroutineScope,
+    /** Call/YouTube jaisi screen kholne ke baad (Max panel isse band ho jaata hai). */
+    private val onLaunch: () -> Unit = {},
+) {
+    /** Mic ki aawaz ka level 0..1 — sunte waqt dots isi se naachte hain. */
+    var micLevel by mutableFloatStateOf(0f)
+        private set
     var state by mutableStateOf(MaxState.Idle)
         private set
     var partialText by mutableStateOf("")
@@ -124,7 +133,8 @@ class MaxController(private val activity: Activity, private val scope: Coroutine
         // Wake word service ko mic chhodne ka thoda time do.
         if (WakeWordService.isRunning) delay(300)
         state = MaxState.Listening
-        val text = speech.listen(settings.language) { partialText = it }
+        val text = speech.listen(settings.language, onLevel = { micLevel = it }) { partialText = it }
+        micLevel = 0f
         partialText = ""
         if (text.isNullOrBlank()) {
             DebugLog.i("Kuch sunai nahi diya")
@@ -170,6 +180,7 @@ class MaxController(private val activity: Activity, private val scope: Coroutine
                 DebugLog.e("Screen nahi khuli: ${intent.action}", e)
             }
         }
+        if (launches.isNotEmpty()) onLaunch()
 
         // Max ne sawaal poocha ("Kaunsa gaana chalaun?") — bina button dabaye jawab suno.
         if (fromVoice && launches.isEmpty() && turn.reply.trim().endsWith("?")) {

@@ -71,11 +71,6 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
-    companion object {
-        /** WakeWordService is action ke saath screen kholti hai jab "Hello Max" suna jaaye. */
-        const val ACTION_WAKE = "com.max.assistant.WAKE"
-    }
-
     private lateinit var controller: MaxController
 
     private val permissionLauncher =
@@ -95,12 +90,6 @@ class MainActivity : ComponentActivity() {
                 MaxScreen(controller, onWakeWordChange = ::setWakeWord)
             }
         }
-        handleIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleIntent(intent)
     }
 
     override fun onResume() {
@@ -112,15 +101,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         controller.destroy()
         super.onDestroy()
-    }
-
-    private fun handleIntent(intent: Intent?) {
-        if (intent?.action != ACTION_WAKE) return
-        intent.action = null // rotate hone par dobara trigger na ho
-        // Phone lock ho tab bhi Max ki screen upar aa jaaye.
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
-        controller.onWake()
     }
 
     private fun startWakeWordIfEnabled() {
