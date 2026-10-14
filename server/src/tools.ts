@@ -29,8 +29,37 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "whatsapp_search",
+    description:
+      "WhatsApp kholo aur uske andar chat dhundho (contacts, groups, WhatsApp-only naam bhi). Result mein milte chats ki list aati hai. " +
+      "WhatsApp message bhejne ka PEHLA kadam yahi hai. Ek se zyada milein to user se poocho kaunsa (number/naam), phir whatsapp_send.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        name: { type: Type.STRING, description: "Jo naam user ne bola" },
+        app: { type: Type.STRING, enum: ["normal", "business"], description: "Kaunsa WhatsApp — sirf jab user ne bataya / poochhne par" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "whatsapp_send",
+    description:
+      "WhatsApp mein chuni hui chat kholo, message likho aur Send dabao (sach mein bhej deta hai). whatsapp_search ke BAAD, " +
+      "aur user se message confirm karne ke baad hi. Result ok aaye tabhi 'bhej diya' bolo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        chat: { type: Type.STRING, description: "whatsapp_search ki list mein se chat ka poora naam" },
+        message: { type: Type.STRING, description: "Bhejne wala message" },
+        app: { type: Type.STRING, enum: ["normal", "business"], description: "Kaunsa WhatsApp (search wala hi)" },
+      },
+      required: ["chat", "message"],
+    },
+  },
+  {
     name: "send_whatsapp",
-    description: "Kisi contact ko WhatsApp message bhejo.",
+    description: "(Backup) WhatsApp chat message ke saath kholo. Sirf tab jab whatsapp_search 'Phone control OFF' bole.",
     parameters: {
       type: Type.OBJECT,
       properties: { contact_name: contactName, message: { type: Type.STRING, description: "Bhejne wala message" } },

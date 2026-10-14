@@ -88,6 +88,7 @@ class MaxController(
      * banakar phone mein save kar lete hain. Jab tak save nahi hui, phone ki aawaz mein bolo.
      */
     private suspend fun greet() {
+        lastQuestion = null
         val text = greetingText(profiles.load())
         val voice = settings.voice
         val cached = File(activity.cacheDir, "greeting_${voice}_${text.hashCode()}.wav")
@@ -225,7 +226,15 @@ class MaxController(
             val name = p.displayName.let { if (it.isBlank()) "" else "$it, " }
             val casual = p.addressStyle == "tum"
             if (silentTries == 0) {
-                sayOnly(if (casual) "${name}sun rahe ho? Kuch chahiye toh bolo." else "${name}aap wahan hain? Kuch chahiye toh bataiye.")
+                // Max ne koi sawaal poocha tha ("Chinna ko 'Hi' bhejun?") to wahi dobara — har baar ek hi
+                // "kuch chahiye toh bolo" robot jaisa lagta tha.
+                val question = lastQuestion
+                val again = when {
+                    question != null -> "$name$question"
+                    casual -> listOf("${name}bolo, kya karna hai?", "${name}sun raha hoon, bolo.", "${name}haan bolo?").random()
+                    else -> listOf("${name}bataiye, kya karna hai?", "${name}main sun raha hoon, boliye.", "${name}haan ji, boliye?").random()
+                }
+                sayOnly(again)
                 listenAndHandle(inConversation = true, silentTries = 1)
             } else {
                 sayOnly(if (casual) "Theek hai, zaroorat ho toh 'Hello Max' bol dena." else "Theek hai, zaroorat ho toh 'Hello Max' boliye.")
@@ -322,8 +331,12 @@ class MaxController(
     }
 
     /** Jawab dikhao aur bolo. Jab tak aawaz taiyaar na ho, UI "..." dikhata hai. */
+    /** Max ka aakhri asli sawaal (jawab na aaye to wahi dobara poochha jaata hai). */
+    private var lastQuestion: String? = null
+
     private suspend fun say(text: String) {
         if (text.isBlank()) return
+        lastQuestion = text.trim().takeIf { it.endsWith("?") }
         DebugLog.i("Max: $text")
         speak(text, settings.voice) { addMessage(fromUser = false, text = text) }
     }

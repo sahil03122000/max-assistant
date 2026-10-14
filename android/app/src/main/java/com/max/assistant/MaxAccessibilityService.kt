@@ -141,6 +141,15 @@ class MaxAccessibilityService : AccessibilityService() {
             .joinToString(" ")
             .lowercase()
 
+    /**
+     * Debug (privacy-safe): sirf elements ke technical id — koi naam/message nahi. WhatsApp jaisi personal
+     * apps ke liye yahi use karo.
+     */
+    fun logIds(tag: String) {
+        val ids = allNodes().mapNotNull { it.viewIdResourceName?.substringAfterLast('/') }.distinct()
+        DebugLog.i("🔎 $tag ($foregroundPackage) ids: ${ids.take(60).joinToString(", ")}")
+    }
+
     /** Debug: screen ke clickable elements log mein (naye app ko samajhne ke liye). */
     fun logClickables(tag: String) {
         val items = allNodes().filter { it.isClickable }.map { n ->

@@ -38,9 +38,11 @@ class DeviceActions(private val context: Context) {
 
     private data class Contact(val name: String, val number: String)
 
-    fun run(action: MaxApi.Action): Outcome = try {
+    suspend fun run(action: MaxApi.Action): Outcome = try {
         val args = action.args
         when (action.name) {
+            "whatsapp_search" -> whatsAppSearch(args)
+            "whatsapp_send" -> whatsAppSend(args)
             "call_contact" -> callContact(args)
             "send_sms" -> sendSms(args)
             "send_whatsapp" -> sendWhatsApp(args)
@@ -58,6 +60,58 @@ class DeviceActions(private val context: Context) {
     } catch (e: Exception) {
         DebugLog.e("Action ${action.name} fail", e)
         Outcome(false, error = e.message ?: e.javaClass.simpleName)
+    }
+
+    // ---------- WhatsApp (Phase 2: app ke andar search → chunna → bhejna) ----------
+
+    /** Kaunsa WhatsApp: dono install hon aur user ne nahi bataya to error — Max user se poochhe. */
+    private fun whatsAppPackage(args: JSONObject): Pair<String?, Outcome?> {
+        val installed = listOf(WhatsAppFlow.NORMAL, WhatsAppFlow.BUSINESS).filter(::isInstalled)
+        if (installed.isEmpty()) return null to Outcome(false, error = "Phone mein WhatsApp install nahi hai")
+        return when (args.optString("app")) {
+            "business" -> (WhatsAppFlow.BUSINESS.takeIf { it in installed }
+                ?: return null to Outcome(false, error = "WhatsApp Business install nahi hai")) to null
+            "normal" -> (WhatsAppFlow.NORMAL.takeIf { it in installed }
+                ?: return null to Outcome(false, error = "Normal WhatsApp install nahi hai")) to null
+            else -> if (installed.size > 1) {
+                null to Outcome(false, error = "Phone mein do WhatsApp hain (normal aur Business). User se poocho kaunse se, phir app='normal' ya 'business' ke saath dobara.")
+            } else {
+                installed.first() to null
+            }
+        }
+    }
+
+    private suspend fun whatsAppSearch(args: JSONObject): Outcome {
+        lockedError()?.let { return it }
+        val service = MaxAccessibilityService.instance
+            ?: return Outcome(false, error = "Phone control OFF hai — iski jagah send_whatsapp use karo (user ko Send khud dabana hoga)")
+        val (pkg, problem) = whatsAppPackage(args)
+        problem?.let { return it }
+        val query = args.optString("name").trim().ifEmpty { return Outcome(false, error = "Kisko dhundhna hai, naam nahi mila") }
+        val result = WhatsAppFlow(service).search(pkg!!, query)
+        return when (result.names.size) {
+            0 -> Outcome(false, error = "WhatsApp mein '$query' naam ki koi chat nahi mili. User se sahi naam poocho.")
+            1 -> Outcome(true, result = "Ek chat mili: ${result.names[0]}. Ab message confirm karke whatsapp_send karo.")
+            else -> Outcome(
+                true,
+                result = "${result.names.size} chats mili: " +
+                    result.names.mapIndexed { i, n -> "${i + 1}. $n" }.joinToString(", ") +
+                    ". User ko numbers ke saath batao aur poocho kisko (wo number, 'pehla' ya poora naam bol sakta hai).",
+            )
+        }
+    }
+
+    private suspend fun whatsAppSend(args: JSONObject): Outcome {
+        lockedError()?.let { return it }
+        val service = MaxAccessibilityService.instance
+            ?: return Outcome(false, error = "Phone control OFF hai — iski jagah send_whatsapp use karo")
+        val (pkg, problem) = whatsAppPackage(args)
+        problem?.let { return it }
+        val chat = args.optString("chat").trim()
+        val message = args.optString("message").trim()
+        if (chat.isEmpty() || message.isEmpty()) return Outcome(false, error = "Chat ka naam ya message nahi mila")
+        WhatsAppFlow(service).send(pkg!!, chat, message)
+        return Outcome(true, result = "Message sach mein bhej diya gaya ($chat)")
     }
 
     // ---------- Contacts / call / messages ----------
