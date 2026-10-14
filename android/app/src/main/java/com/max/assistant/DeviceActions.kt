@@ -43,6 +43,7 @@ class DeviceActions(private val context: Context) {
             "set_reminder" -> setReminder(args)
             "open_app" -> openApp(args)
             "play_on_youtube" -> playOnYouTube(args)
+            "open_camera" -> openCamera(args)
             else -> Outcome(false, error = "Ye kaam (${action.name}) abhi is phone app mein supported nahi hai")
         }
     } catch (e: SecurityException) {
@@ -204,6 +205,26 @@ class DeviceActions(private val context: Context) {
             Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
         }
         return Outcome(true, result = "YouTube par '$query' search hoga", launch = intent)
+    }
+
+    /** Max ka apna camera: selfie (coach ke saath), photo, video. */
+    private fun openCamera(args: JSONObject): Outcome {
+        val mode = when (args.optString("mode")) {
+            "video" -> CameraActivity.MODE_VIDEO
+            "photo" -> CameraActivity.MODE_PHOTO
+            else -> CameraActivity.MODE_SELFIE
+        }
+        val front = when (args.optString("camera")) {
+            "front" -> true
+            "back" -> false
+            else -> mode != CameraActivity.MODE_PHOTO
+        }
+        val what = when (mode) {
+            CameraActivity.MODE_VIDEO -> "video recording"
+            CameraActivity.MODE_PHOTO -> "photo"
+            else -> "selfie (Max chehra dekh ke guide karega aur khud click karega)"
+        }
+        return Outcome(true, result = "Camera khulega: $what", launch = CameraActivity.intent(context, mode, front))
     }
 
     // ---------- Helpers ----------

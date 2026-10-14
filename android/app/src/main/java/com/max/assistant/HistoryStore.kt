@@ -29,7 +29,8 @@ class HistoryStore(context: Context) {
         file.readLines().mapNotNull { line ->
             runCatching {
                 val j = JSONObject(line)
-                HistoryEntry(j.getLong("t"), j.getBoolean("u"), j.getString("m"))
+                // Purane (Hindi akshar wale) messages bhi Roman mein dikhe aur search ho sakein.
+                HistoryEntry(j.getLong("t"), j.getBoolean("u"), Hinglish.romanize(j.getString("m")))
             }.getOrNull()
         }
     }

@@ -85,6 +85,23 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "open_camera",
+    description:
+      "Max ka apna camera kholo. selfie = front camera, Max chehra dekh ke guide karta hai ('thoda left aao', 'smile karo') aur sahi hote hi khud click karta hai. photo = peeche wala camera, 3-2-1 click. video = recording (screen tap karke band). Camera/selfie/photo/video ke liye hamesha yahi use karo, open_app nahi.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        mode: { type: Type.STRING, enum: ["selfie", "photo", "video"], description: "Kya karna hai" },
+        camera: {
+          type: Type.STRING,
+          enum: ["front", "back"],
+          description: "Kaunsa camera (optional). Selfie/video mein front default, photo mein back.",
+        },
+      },
+      required: ["mode"],
+    },
+  },
+  {
     name: "play_on_youtube",
     description:
       "YouTube par gaana ya video chalao. Agar search_youtube se user ne koi video chuna hai to uska video_id do; specific gaane ka naam ho to sirf query kaafi hai.",

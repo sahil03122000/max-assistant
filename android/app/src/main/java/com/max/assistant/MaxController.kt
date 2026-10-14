@@ -67,9 +67,10 @@ class MaxController(
     }
 
     /** "Hello Max" suna gaya — beep karo aur seedha suno. */
-    fun onWake() {
+    /** [quick]: conversation mode mein sirf "Max" bola — greeting nahi, seedha beep aur suno. */
+    fun onWake(quick: Boolean = false) {
         start {
-            greet()
+            if (!quick) greet()
             beep() // "ab bolo" ka ishaara
             listenAndHandle(inConversation = true)
         }
@@ -183,7 +184,7 @@ class MaxController(
         // Wake word service ko mic chhodne ka thoda time do.
         if (WakeWordService.isRunning) delay(300)
         state = MaxState.Listening
-        val text = speech.listen(settings.language, onLevel = { micLevel = it }) { partialText = it }
+        val text = speech.listen(settings.language, onLevel = { micLevel = it }) { partialText = Hinglish.romanize(it) }
         micLevel = 0f
         partialText = ""
         if (text.isNullOrBlank()) {
@@ -209,7 +210,21 @@ class MaxController(
         speak(text, settings.voice) { addMessage(fromUser = false, text = text, saveToHistory = false) }
     }
 
-    private suspend fun handle(rawText: String, fromVoice: Boolean) {
+    private suspend fun handle(spokenText: String, fromVoice: Boolean) {
+        // Hamesha Roman (Hinglish) — kahin bhi Devanagari nahi dikhe.
+        val rawText = Hinglish.romanize(spokenText)
+        WakeWordService.touchSession()
+
+        // "Max stop" / "band karo" / "bas" → Max so jaaye, phir sirf "Hello Max" par jaage.
+        if (SessionCommands.isStop(rawText)) {
+            WakeWordService.endSession()
+            addMessage(fromUser = true, text = rawText)
+            val casual = profiles.load().addressStyle == "tum"
+            sayOnly(if (casual) "Theek hai, main so raha hoon. Zaroorat ho toh 'Hello Max' bolna." else "Theek hai, main so raha hoon. Zaroorat ho toh 'Hello Max' boliye.")
+            onLaunch() // panel band
+            return
+        }
+
         // Card/OTP/password jaisi cheezein phone se bahar jaane se pehle hi chhupa do.
         val privacy = PrivacyFilter.apply(rawText)
         val text = privacy.text

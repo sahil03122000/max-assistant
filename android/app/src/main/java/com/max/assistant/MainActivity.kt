@@ -435,7 +435,10 @@ private fun SettingsDialog(
                     }
                 }
                 Text("Sunne ki bhasha", style = MaterialTheme.typography.labelLarge)
-                listOf("hi-IN" to "Hindi / Hinglish", "en-IN" to "English (India)").forEach { (tag, label) ->
+                listOf(
+                    "en-IN" to "Hinglish — Roman mein likhta hai (recommended)",
+                    "hi-IN" to "Hindi — zyada sahi sunta hai, likhai Roman mein badal di jaati hai",
+                ).forEach { (tag, label) ->
                     Row(
                         Modifier
                             .fillMaxWidth()

@@ -26,7 +26,8 @@ object NameMatcher {
                     if (hasNukta) i++
                     // Vyanjan ke saath "a" apne aap hota hai, jab tak aage matra/halant na ho (aur shabd ke aakhir mein nahi).
                     val next = chars.getOrNull(i + 1)
-                    if (next != null && CONSONANTS.containsKey(next)) out.append('a')
+                    // बंद = b-a-n-d: anusvar/chandrabindu se pehle bhi "a" aata hai.
+                    if (next != null && (CONSONANTS.containsKey(next) || next in "ंँः")) out.append('a')
                 }
                 c in VOWELS -> out.append(VOWELS[c])
                 c in MATRAS -> out.append(MATRAS[c])
@@ -137,5 +138,6 @@ object NameMatcher {
     private val MATRAS = mapOf(
         'ा' to "a", 'ि' to "i", 'ी' to "ee", 'ु' to "u", 'ू' to "oo", 'े' to "e",
         'ै' to "ai", 'ो' to "o", 'ौ' to "au", 'ृ' to "ri", 'ं' to "n", 'ँ' to "n", 'ः' to "h",
+        'ॉ' to "o", 'ॅ' to "e", // English shabdon ke liye: कॉल = call, बैट = bat
     )
 }

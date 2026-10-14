@@ -78,12 +78,12 @@ class AssistantActivity : ComponentActivity() {
                 AssistantSheet(controller, onDismiss = { finish() })
             }
         }
-        if (savedInstanceState == null) wake()
+        if (savedInstanceState == null) wake(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        wake()
+        wake(intent)
     }
 
     override fun onStart() {
@@ -99,9 +99,10 @@ class AssistantActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun wake() {
+    private fun wake(intent: Intent) {
         vibrate(this)
-        controller.onWake()
+        // Conversation mode ("Max" bola, "Hello Max" nahi) — lambi greeting nahi, seedha beep aur suno.
+        controller.onWake(quick = intent.getBooleanExtra(EXTRA_QUICK, false))
     }
 
     companion object {
@@ -110,8 +111,12 @@ class AssistantActivity : ComponentActivity() {
         var isOpen = false
             private set
 
-        fun intent(context: Context): Intent =
-            Intent(context, AssistantActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        private const val EXTRA_QUICK = "quick"
+
+        fun intent(context: Context, quick: Boolean = false): Intent =
+            Intent(context, AssistantActivity::class.java)
+                .putExtra(EXTRA_QUICK, quick)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }
 
@@ -198,7 +203,11 @@ private fun AssistantSheet(controller: MaxController, onDismiss: () -> Unit) {
                 if (state == MaxState.Idle && wasActive) {
                     TextButton(onClick = controller::onMicTap) { Text("🎙  Phir se bolo") }
                 }
-                TextButton(onClick = onDismiss) { Text("✕  Band karo") }
+                // ✕ = Max ko sula do: phir sirf "Hello Max" par jaagega (sirf "Max" par nahi).
+                TextButton(onClick = {
+                    WakeWordService.endSession()
+                    onDismiss()
+                }) { Text("✕  Band karo") }
             }
         }
     }

@@ -43,6 +43,8 @@ class WakeWordService : Service(), RecognitionListener {
         private const val ACTION_STOP = "com.max.assistant.STOP_WAKE_WORD"
         private const val SAMPLE_RATE = 16000f
         private const val RESUME_QUIET_MS = 2000L
+        private const val SESSION_IDLE_MS = 15 * 60 * 1000L
+        private val SESSION_PHRASE = Regex("""\bmax\b""")
         private val WAKE_PHRASE = Regex("""\b(hello|hey|hi) max\b""")
 
         // "[unk]" baaki sab aawazon ko pakad leta hai, taaki har cheez "hello max" na ban jaaye.
@@ -67,6 +69,35 @@ class WakeWordService : Service(), RecognitionListener {
 
         fun resume() {
             instance?.resumeListening()
+        }
+
+        /**
+         * Conversation mode: "Hello Max" ke baad sirf "Max" bolna kaafi. "Max stop" / ✕ se khatam,
+         * ya [SESSION_IDLE_MS] tak koi baat na ho to apne aap (TV/baat-cheet ke "max" par galti se na jaage).
+         */
+        @Volatile
+        var sessionActive = false
+            private set
+        @Volatile
+        private var sessionTouchedAt = 0L
+
+        fun touchSession() {
+            if (sessionActive) sessionTouchedAt = SystemClock.elapsedRealtime()
+        }
+
+        fun endSession() {
+            if (!sessionActive) return
+            sessionActive = false
+            DebugLog.i("💤 Max so gaya — ab sirf 'Hello Max'")
+            instance?.refreshNotification()
+        }
+
+        private fun startSession() {
+            sessionTouchedAt = SystemClock.elapsedRealtime()
+            if (sessionActive) return
+            sessionActive = true
+            DebugLog.i("✅ Max active — ab sirf 'Max' bolo")
+            instance?.refreshNotification()
         }
     }
 
@@ -197,29 +228,33 @@ class WakeWordService : Service(), RecognitionListener {
         val text = hypothesis?.let { runCatching { JSONObject(it).optString(key) }.getOrNull() } ?: return
         // Debug: wake word ne poora vaakya kya suna (sirf final result, partial bahut zyada hote hain).
         if (key == "text" && text.isNotBlank()) DebugLog.i("👂 suna: '$text'")
-        // Poora phrase chahiye — akele "max" (ya milti-julti aawaz) par jaagna galti se trigger karta tha.
-        if (!WAKE_PHRASE.containsMatchIn(text)) return
         val now = SystemClock.elapsedRealtime()
+        if (sessionActive && now - sessionTouchedAt > SESSION_IDLE_MS) endSession()
+        // Normally poora phrase chahiye (akele "max" par galti se jaagta tha). Conversation mode mein sirf "Max".
+        val fullPhrase = WAKE_PHRASE.containsMatchIn(text)
+        val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text)
+        if (!fullPhrase && !quick) return
         // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.
         if (now < ignoreUntil) return
         // Ek hi "Hello Max" se do baar trigger na ho.
         if (now - lastWakeAt < 3000) return
         lastWakeAt = now
-        DebugLog.i("👂 Wake word: '$text'")
-        onWake()
+        DebugLog.i("👂 Wake word: '$text'${if (quick) " (conversation mode)" else ""}")
+        startSession()
+        onWake(quick)
     }
 
-    private fun onWake() {
+    private fun onWake(quick: Boolean) {
         pauseListening()
         // Phone lock / screen band: overlay window dikhti nahi, isliye alarm jaisa full-screen notification.
-        if (isLockedOrScreenOff()) showFullScreenWake()
+        if (isLockedOrScreenOff()) showFullScreenWake(quick)
         // Android 15+: background se screen kholne ke liye "Display over other apps" permission ke saath
         // app ki ek overlay window us waqt DIKH rahi honi chahiye. Isliye pehle 1px ki window, phir panel.
         showBridgeWindow()
         main.postDelayed({
             try {
                 // Poora app nahi — chalti app ke upar chhota Max panel (Google Assistant jaisa).
-                startActivity(AssistantActivity.intent(this))
+                startActivity(AssistantActivity.intent(this, quick))
             } catch (e: Exception) {
                 DebugLog.e("Max ki screen nahi khuli", e)
             }
@@ -240,7 +275,7 @@ class WakeWordService : Service(), RecognitionListener {
         getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(PowerManager::class.java).isInteractive
 
-    private fun showFullScreenWake() {
+    private fun showFullScreenWake(quick: Boolean) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(WAKE_CHANNEL_ID, "Hello Max (lock screen)", NotificationManager.IMPORTANCE_HIGH),
@@ -249,7 +284,7 @@ class WakeWordService : Service(), RecognitionListener {
             DebugLog.e("Lock screen par panel ke liye 'Full screen notifications' permission chahiye")
         }
         val open = PendingIntent.getActivity(
-            this, 2, AssistantActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            this, 2, AssistantActivity.intent(this, quick), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = NotificationCompat.Builder(this, WAKE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -305,11 +340,18 @@ class WakeWordService : Service(), RecognitionListener {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Max sun raha hai")
-            .setContentText("\"Hello Max\" bolo")
+            .setContentTitle(if (sessionActive) "✅ Max active hai" else "Max sun raha hai")
+            .setContentText(
+                if (sessionActive) "Sirf \"Max\" bolo  •  \"Max stop\" se so jaayega" else "\"Hello Max\" bolo",
+            )
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Band karo", stop)
+            .addAction(0, "Max OFF karo", stop)
             .build()
+    }
+
+    private fun refreshNotification() {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
     }
 }
