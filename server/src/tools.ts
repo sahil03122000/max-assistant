@@ -88,7 +88,7 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     name: "open_camera",
     description:
       "Camera kholo — selfie, photo ya video. Camera ke har kaam ke liye yahi use karo (open_app nahi). " +
-      "app='phone' (DEFAULT): phone ka apna Camera app, selfie ho to front camera; click user khud karta hai. " +
+      "app='phone' (DEFAULT): phone ka apna Camera app, selfie ho to front camera; agar phone control ON hai to Max khud guide karke click karta hai, warna user. " +
       "app='snapchat' / 'instagram': us app ka camera. " +
       "app='max': Max ka apna coach camera — Max chehra dekh ke guide karta hai ('thoda left aao', 'smile karo') aur khud click karta hai; SIRF tab jab user kahe ki Max guide kare / khud photo le.",
     parameters: {
@@ -108,6 +108,12 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
       },
       required: ["mode"],
     },
+  },
+  {
+    name: "unlock_phone",
+    description:
+      "Phone ka lock kholne wali screen saamne lao (face/fingerprint/PIN). 'Phone kholo', 'unlock karo' ke liye. Max khud lock nahi tod sakta — user dekh ke ya ungli laga ke kholta hai.",
+    parameters: { type: Type.OBJECT, properties: {} },
   },
   {
     name: "play_on_youtube",

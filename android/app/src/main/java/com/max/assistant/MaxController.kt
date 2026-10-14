@@ -236,6 +236,7 @@ class MaxController(
         DebugLog.i("Aap: $text")
 
         val launches = mutableListOf<Intent>()
+        val afterLaunches = mutableListOf<() -> Unit>()
         var turn = api.chat(sessionId, text, profiles.load().toServerJson())
         while (turn.status == "needs_action") {
             val results = JSONArray()
@@ -243,6 +244,7 @@ class MaxController(
                 val outcome = actions.run(action)
                 DebugLog.i("📱 ${action.name} ${action.args} → ${if (outcome.ok) "ok" else "FAIL: ${outcome.error}"}")
                 outcome.launch?.let(launches::add)
+                outcome.afterLaunch?.let(afterLaunches::add)
                 results.put(
                     JSONObject().put("id", action.id).put("ok", outcome.ok).apply {
                         outcome.result?.let { put("result", it) }
@@ -270,6 +272,7 @@ class MaxController(
                 DebugLog.e("Screen nahi khuli: ${intent.action}", e)
             }
         }
+        afterLaunches.forEach { it() }
         if (launches.isNotEmpty()) onLaunch()
 
         // Max ne sawaal poocha ("Kaunsa gaana chalaun?") — bina button dabaye jawab suno.

@@ -392,6 +392,22 @@ private fun SettingsDialog(
                     }
                     Switch(checked = wakeWord, onCheckedChange = { wakeWord = it })
                 }
+                val context = LocalContext.current
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("📱 Phone control", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            if (MaxAccessibilityService.isEnabled) "ON — Max khud tap/click kar sakta hai"
+                            else "OFF — selfie mein khud click, apps chalana iske liye",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = {
+                        Toast.makeText(context, "Installed apps → Max — phone control → ON", Toast.LENGTH_LONG).show()
+                        context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
+                }
                 Text("Max ki aawaz (naam par tap = sunao)", style = MaterialTheme.typography.labelLarge)
                 Settings.VOICES.forEach { (id, label) ->
                     Row(

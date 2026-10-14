@@ -1,6 +1,8 @@
 package com.max.assistant
 
 import android.Manifest
+import android.app.Activity
+import android.app.KeyguardManager
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -29,6 +31,8 @@ class DeviceActions(private val context: Context) {
         val result: String? = null,
         val error: String? = null,
         val launch: Intent? = null,
+        /** [launch] wali screen khulne ke baad chalne wala kaam (jaise Camera app mein selfie coach). */
+        val afterLaunch: (() -> Unit)? = null,
     )
 
     private data class Contact(val name: String, val number: String)
@@ -45,6 +49,7 @@ class DeviceActions(private val context: Context) {
             "open_app" -> openApp(args)
             "play_on_youtube" -> playOnYouTube(args)
             "open_camera" -> openCamera(args)
+            "unlock_phone" -> unlockPhone()
             else -> Outcome(false, error = "Ye kaam (${action.name}) abhi is phone app mein supported nahi hai")
         }
     } catch (e: SecurityException) {
@@ -208,6 +213,22 @@ class DeviceActions(private val context: Context) {
         return Outcome(true, result = "YouTube par '$query' search hoga", launch = intent)
     }
 
+    /**
+     * "Phone kholo": Android kisi app ko khud lock kholne nahi deta (aur dena bhi nahi chahiye) — Max
+     * sirf unlock wali screen (face / fingerprint / PIN) saamne laata hai. Face unlock ho to bas dekho.
+     */
+    private fun unlockPhone(): Outcome {
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        if (!keyguard.isKeyguardLocked) return Outcome(true, result = "Phone pehle se khula hai")
+        val activity = context as? Activity ?: return Outcome(false, error = "Unlock screen nahi khul payi")
+        keyguard.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
+            override fun onDismissSucceeded() = DebugLog.i("🔓 Phone khul gaya")
+            override fun onDismissCancelled() = DebugLog.i("🔒 Unlock cancel")
+            override fun onDismissError() = DebugLog.e("Unlock screen error")
+        })
+        return Outcome(true, result = "Unlock screen khul gayi — user face/fingerprint/PIN se kholega")
+    }
+
     /** Max ka apna camera: selfie (coach ke saath), photo, video. */
     private fun openCamera(args: JSONObject): Outcome {
         val mode = when (args.optString("mode")) {
@@ -250,11 +271,18 @@ class DeviceActions(private val context: Context) {
                         .putExtra("com.google.assistant.extra.USE_FRONT_CAMERA", true)
                 }
                 val what = if (video) "video mode" else if (front) "selfie (front camera)" else "photo"
+                // Phase 2: phone control ON ho to selfie mein Max khud guide karke click karta hai.
+                val coach = !video && front && MaxAccessibilityService.isEnabled
                 Outcome(
                     true,
-                    result = "Phone ka Camera app $what mein khulega; click user khud karega. " +
-                        "(Kuch phones front camera khud select nahi karte — tab user ko camera palatna hoga.)",
+                    result = when {
+                        coach -> "Phone ka Camera app selfie mein khulega; Max khud front camera, guide aur click karega"
+                        !video && front -> "Phone ka Camera app $what mein khulega; click user khud karega. " +
+                            "Agar user chahe ki Max khud click kare to Max app ki Settings mein 'Phone control' ON karna hoga."
+                        else -> "Phone ka Camera app $what mein khulega; click user khud karega."
+                    },
                     launch = launch,
+                    afterLaunch = if (coach) ({ MaxAccessibilityService.instance?.startSelfieCoach() }) else null,
                 )
             }
         }
