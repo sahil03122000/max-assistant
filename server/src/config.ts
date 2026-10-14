@@ -10,7 +10,7 @@ const Env = z.object({
   // Main model par zyada load ho (503) to Max in models ko ek-ek karke try karega (comma se alag).
   GEMINI_FALLBACK_MODELS: z
     .string()
-    .default("gemini-3.1-flash-lite,gemini-3-flash-preview,gemini-3.5-flash")
+    .default("gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.1-flash-lite,gemini-3.7-flash,gemini-3.6-flash,gemini-3-flash-preview,gemini-3.5-flash")
     .transform((s) => s.split(",").map((m) => m.trim()).filter(Boolean)),
   // Natural aawaz (text-to-speech). Pehla busy ho to agla.
   GEMINI_TTS_MODELS: z

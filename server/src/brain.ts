@@ -20,6 +20,9 @@ import { searchYouTube } from "./youtube.js";
 const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
 const MAX_STEPS = 8;
 const STALE_LOCK_MS = 90_000;
+// Free limit khatam hone wale model ko 1 ghante tak chhod do — har request par pehle use try karna time barbaad karta tha.
+const LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
+const limitHitUntil = new Map<string, number>();
 
 export type TurnResult =
   | { status: "done"; reply: string }
@@ -160,10 +163,12 @@ async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Pr
 
 async function think(history: Content[], systemInstruction: string): Promise<Content> {
   let lastError: unknown;
-  const quotaExhausted = new Set<string>();
+  const triedThisTurn = new Set<string>();
   for (const { model, delayMs } of ATTEMPTS) {
-    // Har model ki free limit alag hai — jiski khatam ho gayi use dobara mat try karo.
-    if (quotaExhausted.has(model)) continue;
+    // Har model ki free limit alag hai — jiski khatam ho chuki (is ya pichhli request mein) use abhi mat try karo.
+    if ((limitHitUntil.get(model) ?? 0) > Date.now()) continue;
+    if (triedThisTurn.has(model) && delayMs === 0) continue;
+    triedThisTurn.add(model);
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
     try {
       const res = await ai.models.generateContent({
@@ -183,7 +188,7 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
       }
       if (!(err instanceof ApiError)) throw err;
       if (err.status === 429) {
-        quotaExhausted.add(model);
+        limitHitUntil.set(model, Date.now() + LIMIT_COOLDOWN_MS);
         console.warn(`  🚫 ${model} ki free limit khatam, agla model try kar raha hoon...`);
         continue;
       }
