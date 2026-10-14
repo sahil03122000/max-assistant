@@ -9,10 +9,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.ZonedDateTime
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Reminders: AlarmManager tay time par ReminderReceiver ko jagata hai, wo notification dikhata hai.
@@ -98,12 +105,58 @@ class ReminderReceiver : BroadcastReceiver() {
         if (intent.action == ACTION_BIRTHDAY) {
             Reminders.showBirthday(context)
         } else {
-            Reminders.show(context, intent.getStringExtra(EXTRA_TEXT) ?: "Reminder")
+            val text = intent.getStringExtra(EXTRA_TEXT) ?: "Reminder"
+            Reminders.show(context, text)
+            // Reminder zor se bolo bhi. goAsync = receiver ko bolna khatam hone tak zinda rakho (max ~10 sec).
+            val pending = goAsync()
+            ReminderSpeaker.speak(context.applicationContext, text) { pending.finish() }
         }
     }
 
     companion object {
         const val EXTRA_TEXT = "text"
         const val ACTION_BIRTHDAY = "com.max.assistant.BIRTHDAY"
+    }
+}
+
+/**
+ * Reminder ke time phone ki offline aawaz mein bolta hai — app band ho tab bhi chalta hai, server nahi chahiye.
+ * Alarm volume par bajta hai, taaki media volume kam ho tab bhi sunai de.
+ */
+private object ReminderSpeaker {
+    private const val MAX_SPEAK_MS = 9_000L
+
+    fun speak(context: Context, text: String, done: () -> Unit) {
+        val finished = AtomicBoolean(false)
+        var tts: TextToSpeech? = null
+        val main = Handler(Looper.getMainLooper())
+        fun finish() {
+            if (!finished.compareAndSet(false, true)) return
+            tts?.shutdown()
+            done()
+        }
+        tts = TextToSpeech(context) { status ->
+            val engine = tts
+            if (status != TextToSpeech.SUCCESS || engine == null) {
+                finish()
+                return@TextToSpeech
+            }
+            val hindi = text.any { it in 'ऀ'..'ॿ' }
+            engine.setLanguage(Locale.forLanguageTag(if (hindi) "hi-IN" else "en-IN"))
+            engine.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) = main.post { finish() }.let {}
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) = main.post { finish() }.let {}
+            })
+            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "reminder")
+        }
+        main.postDelayed({ finish() }, MAX_SPEAK_MS)
     }
 }

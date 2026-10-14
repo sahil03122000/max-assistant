@@ -15,7 +15,7 @@ const Env = z.object({
   // Natural aawaz (text-to-speech). Pehla busy ho to agla.
   GEMINI_TTS_MODELS: z
     .string()
-    .default("gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts")
+    .default("gemini-3.8-flash-lite-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts,gemini-3.8-flash-tts")
     .transform((s) => s.split(",").map((m) => m.trim()).filter(Boolean)),
   GEMINI_TTS_VOICE: z.string().default("Puck"),
   // Android app har request mein ye token bhejega, taaki koi aur aapka server use na kare.

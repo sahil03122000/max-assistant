@@ -64,12 +64,13 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
   },
   {
     name: "set_reminder",
-    description: "Kisi specific date/time par reminder lagao. Max us time par notification dega.",
+    description:
+      "Kisi specific date/time par reminder lagao. Us time phone reminder ko ZOR SE BOLEGA aur notification bhi dega. 'X minute baad batana', 'timer mein 1 minute bache tab batana' jaise kaamon ke liye bhi yahi use karo.",
     parameters: {
       type: Type.OBJECT,
       properties: {
         datetime: { type: Type.STRING, description: "ISO 8601 date-time timezone ke saath, jaise 2026-10-12T09:00:00+05:30" },
-        text: { type: Type.STRING, description: "Kis baat ka reminder" },
+        text: { type: Type.STRING, description: "Reminder ke time bola jaane wala vaakya, jaise 'Sahil, timer mein 1 minute bacha hai'" },
       },
       required: ["datetime", "text"],
     },

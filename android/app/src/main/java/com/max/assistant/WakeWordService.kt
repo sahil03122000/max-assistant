@@ -1,5 +1,6 @@
 package com.max.assistant
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,7 +10,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -35,6 +38,8 @@ class WakeWordService : Service(), RecognitionListener {
     companion object {
         private const val CHANNEL_ID = "wake_word"
         private const val NOTIFICATION_ID = 42
+        private const val WAKE_CHANNEL_ID = "wake_fullscreen"
+        const val WAKE_NOTIFICATION_ID = 43
         private const val ACTION_STOP = "com.max.assistant.STOP_WAKE_WORD"
         private const val SAMPLE_RATE = 16000f
 
@@ -199,6 +204,8 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun onWake() {
         pauseListening()
+        // Phone lock / screen band: overlay window dikhti nahi, isliye alarm jaisa full-screen notification.
+        if (isLockedOrScreenOff()) showFullScreenWake()
         // Android 15+: background se screen kholne ke liye "Display over other apps" permission ke saath
         // app ki ek overlay window us waqt DIKH rahi honi chahiye. Isliye pehle 1px ki window, phir panel.
         showBridgeWindow()
@@ -220,6 +227,33 @@ class WakeWordService : Service(), RecognitionListener {
             DebugLog.e("Max panel nahi khula — 'Display over other apps' permission check karo. Phir se sun raha hoon.")
             resumeListening()
         }
+    }
+
+    private fun isLockedOrScreenOff(): Boolean =
+        getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
+            !getSystemService(PowerManager::class.java).isInteractive
+
+    private fun showFullScreenWake() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(WAKE_CHANNEL_ID, "Hello Max (lock screen)", NotificationManager.IMPORTANCE_HIGH),
+        )
+        if (Build.VERSION.SDK_INT >= 34 && !manager.canUseFullScreenIntent()) {
+            DebugLog.e("Lock screen par panel ke liye 'Full screen notifications' permission chahiye")
+        }
+        val open = PendingIntent.getActivity(
+            this, 2, AssistantActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(this, WAKE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Max sun raha hai")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setFullScreenIntent(open, true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(15_000)
+            .build()
+        manager.notify(WAKE_NOTIFICATION_ID, notification)
     }
 
     private var bridgeWindow: View? = null

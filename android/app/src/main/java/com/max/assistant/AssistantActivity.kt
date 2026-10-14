@@ -1,5 +1,6 @@
 package com.max.assistant
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -88,6 +89,8 @@ class AssistantActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         isOpen = true
+        // Lock screen wala "Max sun raha hai" full-screen notification ab zaroori nahi.
+        getSystemService(NotificationManager::class.java).cancel(WakeWordService.WAKE_NOTIFICATION_ID)
     }
 
     override fun onDestroy() {

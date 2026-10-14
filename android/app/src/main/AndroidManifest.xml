@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Background se Max ki screen kholne ke liye ("Display over other apps") -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Reminders ekdum sahi time par ("1 minute bache tab batana") -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Phone lock ho tab "Hello Max" par panel kholna (alarm/call jaisa full-screen) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- "Hello Max" sunte hi halki vibration -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Battery saver Max ki service band na kare -->

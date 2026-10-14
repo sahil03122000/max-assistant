@@ -86,7 +86,8 @@ class MaxController(
 
         val voice = settings.voice
         val cached = File(activity.cacheDir, "greeting_${voice}_${text.hashCode()}.wav")
-        if (voice != Settings.PHONE_VOICE && cached.exists()) {
+        val naturalOk = voice != Settings.PHONE_VOICE && System.currentTimeMillis() >= naturalVoiceDownUntil
+        if (naturalOk && cached.exists()) {
             try {
                 voicePlayer.play(withContext(Dispatchers.IO) { cached.readBytes() })
                 return
@@ -96,7 +97,7 @@ class MaxController(
                 DebugLog.e("Greeting play nahi hui", e)
             }
         }
-        if (voice != Settings.PHONE_VOICE) {
+        if (naturalOk) {
             // Agli baar ke liye natural aawaz background mein bana kar rakh lo.
             scope.launch {
                 fetchVoice(text, voice)?.let { wav ->
@@ -254,14 +255,31 @@ class MaxController(
         speaker.speak(text)
     }
 
-    private suspend fun fetchVoice(text: String, voice: String): ByteArray? = try {
-        withTimeoutOrNull(8_000) { api.tts(text, voice) }
-            ?: null.also { DebugLog.i("Natural aawaz slow — phone ki aawaz") }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        DebugLog.e("Natural aawaz nahi mili, phone ki aawaz use kar raha hoon", e)
-        null
+    private suspend fun fetchVoice(text: String, voice: String): ByteArray? {
+        // Natural aawaz abhi-abhi fail hui thi — kuch der phone ki aawaz hi rakho, taaki ek hi baat-cheet
+        // mein aawaz baar-baar na badle (aur har jawab par 8 sec ka intezaar bhi na ho).
+        if (System.currentTimeMillis() < naturalVoiceDownUntil) return null
+        val wav = try {
+            withTimeoutOrNull(8_000) { api.tts(text, voice) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DebugLog.e("Natural aawaz nahi mili", e)
+            null
+        }
+        if (wav == null) {
+            naturalVoiceDownUntil = System.currentTimeMillis() + NATURAL_VOICE_COOLDOWN_MS
+            DebugLog.i("Natural aawaz slow/fail — agle 5 min phone ki aawaz")
+        }
+        return wav
+    }
+
+    private companion object {
+        const val NATURAL_VOICE_COOLDOWN_MS = 5 * 60 * 1000L
+
+        // Static: "Hello Max" panel har baar naya controller banata hai, ye sab mein share hona chahiye.
+        @Volatile
+        var naturalVoiceDownUntil = 0L
     }
 
     /** "Hello Max" ka jawab — naam, Aap/Tum aur birthday ke hisaab se. (Emoji nahi, ye bola jaata hai.) */
