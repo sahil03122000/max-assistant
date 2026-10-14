@@ -72,14 +72,28 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
         val switch = service.find(SWITCH_WORDS, exclude = listOf("video"))
         val label = switch?.let { service.label(it) }.orEmpty()
         // Kai camera apps (jaise OnePlus) switch button par abhi ka camera likhte hain: "rear camera" / "front camera".
-        when {
-            "front" in label -> return
-            "rear" in label || "back" in label -> {
-                DebugLog.i("🔄 Rear se front par switch: '$label'")
-                service.click(switch!!)
-                delay(1500)
-                return
+        if ("front" in label) return
+        if ("rear" in label || "back" in label) {
+            // Camera app poora taiyaar na ho to click chhoot jaata tha — dabao, check karo, zaroorat ho to phir dabao.
+            repeat(3) { attempt ->
+                val button = service.find(SWITCH_WORDS, exclude = listOf("video")) ?: return@repeat
+                val now = service.label(button)
+                if ("front" in now) return
+                DebugLog.i("🔄 Rear se front par switch (koshish ${attempt + 1}): '$now'")
+                service.click(button)
+                // ~2.5 sec tak dekho ki switch hua ya nahi.
+                repeat(10) {
+                    delay(250)
+                    val after = service.find(SWITCH_WORDS, exclude = listOf("video"))?.let { service.label(it) }.orEmpty()
+                    if ("front" in after) {
+                        delay(600) // front preview shuru hone do
+                        return
+                    }
+                }
             }
+            DebugLog.e("Front camera par switch nahi hua")
+            voice.say("Front camera par palat do, aur camera ki taraf dekho")
+            return
         }
         if (faceVisible()) return
         if (switch != null) {
