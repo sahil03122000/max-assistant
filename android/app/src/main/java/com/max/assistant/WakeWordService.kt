@@ -267,7 +267,10 @@ class WakeWordService : Service() {
         lastWakeAt = now
         DebugLog.i("👂 Wake word: '$text'${if (quick) " (conversation mode)" else ""}")
         startSession()
-        onWake(quick, command)
+        // Video chal rahi thi to "Hello Max" ke baad wali aawaz mein video ki baat bhi hai ("Kali bhej kari Madhav"
+        // video se aaya aur WhatsApp khul gaya) — wo mat lo. Video ab ruk gayi hai, Max saaf mic se poochh ke sunega.
+        if (media && command != null) DebugLog.i("🎬 Video chal rahi thi — saath wali aawaz chhodi, ab saaf sunenge")
+        onWake(quick, if (media) null else command)
     }
 
     /** Phone call / WhatsApp call chal rahi hai ya ghanti baj rahi hai. */
