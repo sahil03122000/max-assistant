@@ -73,7 +73,21 @@ export async function groqThink(
 }
 
 /** Gemini history → Groq messages. Function calls ki id na ho to jagah ke hisaab se bana do (dono taraf same). */
-function toMessages(history: Content[], systemInstruction: string): GroqMessage[] {
+// Groq free mein har minute ~8000 tokens. Poori history bhejne se limit jaldi lagti thi aur Max dheeme Gemini
+// par chala jaata tha — sirf haal ki baat-cheet bhejo (user ke kisi text message se shuru, adhoore tool call se nahi).
+const GROQ_MAX_HISTORY = 12;
+
+function recent(history: Content[]): Content[] {
+  if (history.length <= GROQ_MAX_HISTORY) return history;
+  for (let i = history.length - GROQ_MAX_HISTORY; i < history.length; i++) {
+    const c = history[i];
+    if (c?.role === "user" && c.parts?.some((p) => p.text) && !c.parts.some((p) => p.functionResponse)) return history.slice(i);
+  }
+  return history.slice(-GROQ_MAX_HISTORY);
+}
+
+function toMessages(fullHistory: Content[], systemInstruction: string): GroqMessage[] {
+  const history = recent(fullHistory);
   const messages: GroqMessage[] = [{ role: "system", content: systemInstruction }];
   let openCalls: string[] = []; // pichhle model turn ke call ids, unke responses ke liye
   history.forEach((content, turn) => {

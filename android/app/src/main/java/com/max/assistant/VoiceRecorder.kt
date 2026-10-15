@@ -43,16 +43,20 @@ class VoiceRecorder {
             val preRoll = ArrayDeque<ShortArray>()
             val speech = ByteArrayOutputStream()
 
-            // 1) Kamre ka shor naapo.
+            // 1) Kamre ka shor naapo. Mic chalu hote hi pehle kuch frames bilkul khaali (zero, -100 dB) aate hain —
+            //    unhe shor maan liya tha to har baar poore 15 sec record hota tha. Khaali frames chhodo.
             val calibration = mutableListOf<Double>()
-            while (calibration.size < CALIBRATE_FRAMES) {
+            var reads = 0
+            while (calibration.size < CALIBRATE_FRAMES && reads < CALIBRATE_FRAMES * 4) {
                 ensureActive()
                 val n = record.read(frame, 0, FRAME)
-                if (n > 0) calibration += rmsDb(frame, n)
+                reads++
+                if (n > 0) rmsDb(frame, n).takeIf { it > -90 }?.let { calibration += it }
             }
-            val floor = calibration.sorted()[calibration.size / 2]
+            val floor = if (calibration.isEmpty()) DEFAULT_FLOOR_DB else calibration.sorted()[calibration.size / 2]
             val startDb = maxOf(floor + 10, -52.0)
             withContext(Dispatchers.Main) { onReady() }
+            var peak = startDb
 
             // 2) Bolna shuru hone ka intezaar, 3) chup hone tak record.
             var started = false
@@ -88,10 +92,13 @@ class VoiceRecorder {
                     continue
                 }
                 speech.write(toBytes(chunk))
-                quiet = if (db < startDb - 4) quiet + 1 else 0
+                // Chup = aawaz user ke apne peak se kaafi neeche (ya shor jitni) — kamre ka halka shor "bolna" na lage.
+                peak = maxOf(peak, db)
+                val quietBelow = maxOf(startDb - 3, peak - 22)
+                quiet = if (db < quietBelow) quiet + 1 else 0
                 if (quiet >= END_SILENCE_FRAMES || speech.size() > SAMPLE_RATE * 2 * MAX_SECONDS) break
             }
-            DebugLog.i("🎙️ Record: ${"%.1f".format(speech.size() / (SAMPLE_RATE * 2.0))} sec (shor ${floor.toInt()} dB)")
+            DebugLog.i("🎙️ Record: ${"%.1f".format(speech.size() / (SAMPLE_RATE * 2.0))} sec (shor ${floor.toInt()} dB, peak ${peak.toInt()} dB)")
             wav(speech.toByteArray())
         } finally {
             runCatching { record.stop() }
@@ -127,7 +134,8 @@ class VoiceRecorder {
         const val BEEP_SKIP_FRAMES = 12 // beep ~0.2 sec
         const val PRE_ROLL_FRAMES = 40 // 0.8 sec
         const val START_FRAMES = 4 // 80 ms lagatar aawaz
-        const val END_SILENCE_FRAMES = 50 // 1 sec chup
-        const val MAX_SECONDS = 15
+        const val END_SILENCE_FRAMES = 40 // 0.8 sec chup
+        const val MAX_SECONDS = 12
+        const val DEFAULT_FLOOR_DB = -60.0
     }
 }
