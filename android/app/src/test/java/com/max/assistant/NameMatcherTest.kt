@@ -23,6 +23,15 @@ class NameMatcherTest {
     }
 
     @Test
+    fun similarNamesAllReturnedSoMaxAsks() {
+        val withPapaji = contacts + "Papaji"
+        assertEquals(listOf("Papa", "Papaji"), NameMatcher.match("papa", withPapaji))
+        // User ne list se "Papa" chuna → sirf Papa (dobara mat poochho).
+        assertEquals(listOf("Papa"), NameMatcher.match("Papa", withPapaji, exact = true))
+        assertEquals(listOf("Papaji"), NameMatcher.match("papaji", withPapaji))
+    }
+
+    @Test
     fun unknownNameGivesNoMatchButSuggestions() {
         assertTrue(NameMatcher.match("abc", contacts).isEmpty())
         val suggestions = NameMatcher.suggest("abc", contacts)

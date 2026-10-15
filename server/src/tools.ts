@@ -13,18 +13,25 @@ const contactName = {
   description: "Contact ka naam jaise user ne bola, jaise 'Papa', 'Mummy', 'Rahul'. Phone ki contact list mein isi se dhundha jayega.",
 };
 
+const exactName = {
+  type: Type.BOOLEAN,
+  description:
+    "true SIRF tab jab user ne pichhli list (jaise 'Papa ya Papaji?') mein se ek poora naam chuna ho — " +
+    "contact_name mein wahi poora naam do. Pehli baar naam bolne par mat bhejo.",
+};
+
 export const DEVICE_TOOLS: FunctionDeclaration[] = [
   {
     name: "call_contact",
     description: "Phone se kisi contact ko call lagao.",
-    parameters: { type: Type.OBJECT, properties: { contact_name: contactName }, required: ["contact_name"] },
+    parameters: { type: Type.OBJECT, properties: { contact_name: contactName, exact_name: exactName }, required: ["contact_name"] },
   },
   {
     name: "send_sms",
     description: "Kisi contact ko SMS bhejo.",
     parameters: {
       type: Type.OBJECT,
-      properties: { contact_name: contactName, message: { type: Type.STRING, description: "Bhejne wala message" } },
+      properties: { contact_name: contactName, exact_name: exactName, message: { type: Type.STRING, description: "Bhejne wala message" } },
       required: ["contact_name", "message"],
     },
   },
@@ -64,7 +71,7 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     description: "(Backup) WhatsApp chat message ke saath kholo. Sirf tab jab whatsapp_search 'Phone control OFF' bole.",
     parameters: {
       type: Type.OBJECT,
-      properties: { contact_name: contactName, message: { type: Type.STRING, description: "Bhejne wala message" } },
+      properties: { contact_name: contactName, exact_name: exactName, message: { type: Type.STRING, description: "Bhejne wala message" } },
       required: ["contact_name", "message"],
     },
   },

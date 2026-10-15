@@ -65,15 +65,21 @@ object NameMatcher {
      * [names] mein se [query] se match. Pehle pakka match (same naam / naam ke andar / same dhancha),
      * na mile to khaali list — tab [suggest] se milte-julte naam lo.
      */
-    fun match(query: String, names: List<String>): List<String> {
+    /**
+     * [exact] = user ne list mein se poora naam chuna hai ("Papa" — "Papaji" nahi) → sirf wahi naam.
+     * Warna saare milte naam: "papa" → Papa AUR Papaji (pehle exact milte hi Papaji chhoot jaata tha, Max poochhta nahi tha).
+     */
+    fun match(query: String, names: List<String>, exact: Boolean = false): List<String> {
         val q = normalize(query)
         if (q.isEmpty()) return emptyList()
+        val sameName = names.filter { normalize(it) == q }
+        if (exact && sameName.isNotEmpty()) return sameName
         val qWords = toLatin(query).lowercase().split(Regex("\\s+")).map { normalize(it) }.filter { it.isNotEmpty() }
-        names.filter { normalize(it) == q }.takeIf { it.isNotEmpty() }?.let { return it }
-        names.filter { name ->
+        val related = names.filter { name ->
             val words = toLatin(name).lowercase().split(Regex("\\s+")).map { normalize(it) }
             words.any { it == q } || qWords.all { qw -> words.any { it == qw } } || (q.length >= 3 && normalize(name).contains(q))
-        }.takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        (sameName + related).distinct().takeIf { it.isNotEmpty() }?.let { return it }
         val qs = skeleton(query)
         if (qs.length >= 2) names.filter { skeleton(it) == qs }.takeIf { it.isNotEmpty() }?.let { return it }
         return names.filter { similarity(query, it) >= 0.8 }

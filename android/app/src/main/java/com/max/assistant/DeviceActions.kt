@@ -205,7 +205,8 @@ class DeviceActions(private val context: Context) {
         val query = args.optString("contact_name").trim()
         if (query.isEmpty()) return Outcome(false, error = "Contact ka naam nahi mila")
         val all = loadContacts()
-        val matchedNames = NameMatcher.match(query, all.map { it.name }.distinct()).toSet()
+        val exact = args.optBoolean("exact_name", false)
+        val matchedNames = NameMatcher.match(query, all.map { it.name }.distinct(), exact).toSet()
         val matches = all.filter { it.name in matchedNames }
             .distinctBy { it.name.lowercase() to it.number.filter(Char::isDigit).takeLast(10) }
         val names = matches.map { it.name }.distinct()
@@ -222,7 +223,9 @@ class DeviceActions(private val context: Context) {
             }
             names.size > 1 -> Outcome(
                 false,
-                error = "'$query' se ${names.size} contacts mile: ${names.take(5).joinToString()}. User se poocho kaunsa.",
+                error = "'$query' se ${names.size} contacts mile: ${names.take(5).joinToString()}. " +
+                    "Kuch mat karo — pehle user se poocho kaunsa (jaise '${names.take(2).joinToString(" ya ")}, kisko?'). " +
+                    "Jawab aane par wahi poora naam contact_name mein aur exact_name=true bhejo.",
             )
             else -> block(matches.first())
         }
