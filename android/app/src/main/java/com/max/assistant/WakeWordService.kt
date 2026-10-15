@@ -22,9 +22,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import org.vosk.Model
-import org.vosk.Recognizer
-import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
 
 /**
@@ -34,7 +31,7 @@ import org.vosk.android.StorageService
  * internet nahi lagta aur battery kam khaata hai. Phrase sunte hi mic chhod deta hai aur Max ki
  * screen kholta hai; Max ki baat khatam hone par [resume] se phir sunne lagta hai.
  */
-class WakeWordService : Service(), RecognitionListener {
+class WakeWordService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "wake_word"
@@ -42,7 +39,6 @@ class WakeWordService : Service(), RecognitionListener {
         private const val WAKE_CHANNEL_ID = "wake_fullscreen"
         const val WAKE_NOTIFICATION_ID = 43
         private const val ACTION_STOP = "com.max.assistant.STOP_WAKE_WORD"
-        private const val SAMPLE_RATE = 16000f
         private const val RESUME_QUIET_MS = 2000L
         private const val SESSION_IDLE_MS = 3 * 60 * 1000L
         // Kitna pakka suna ho tab jaago (0..1). Galti se jaage to badhao, sune nahi to ghatao.
@@ -99,6 +95,17 @@ class WakeWordService : Service(), RecognitionListener {
         @Volatile
         private var sessionTouchedAt = 0L
 
+        /** "Hello Max" ke saath hi bola gaya kaam (WAV) + kab — panel ise ek baar le leta hai. */
+        @Volatile
+        private var pendingCommand: Pair<ByteArray, Long>? = null
+
+        /** Wake word ke saath bola gaya kaam (pichhle ~10 sec ka), ek hi baar milta hai. */
+        fun takePendingCommand(): ByteArray? {
+            val (wav, at) = pendingCommand ?: return null
+            pendingCommand = null
+            return wav.takeIf { SystemClock.elapsedRealtime() - at < 10_000 }
+        }
+
         /** Load hua offline model — Max ke bolte waqt "Max stop" sunne ([BargeInListener]) ke liye bhi. */
         val sharedModel: Model? get() = instance?.model
 
@@ -142,8 +149,7 @@ class WakeWordService : Service(), RecognitionListener {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
     private var model: Model? = null
-    private var recognizer: Recognizer? = null
-    private var speechService: SpeechService? = null
+    private var mic: WakeMic? = null
     private var paused = false
     private var lastWakeAt = 0L
     private var ignoreUntil = 0L
@@ -199,25 +205,14 @@ class WakeWordService : Service(), RecognitionListener {
 
     private fun startListening() {
         val m = model ?: return
-        if (speechService != null) return
-        try {
-            val rec = Recognizer(m, SAMPLE_RATE, GRAMMAR).apply { setWords(true) } // har shabd ka confidence
-            recognizer = rec
-            speechService = SpeechService(rec, SAMPLE_RATE).also { it.startListening(this) }
-        } catch (e: Exception) {
-            DebugLog.e("Wake word mic start nahi hua", e)
-            stopListening()
-        }
+        if (mic != null) return
+        // Apna mic loop (har shabd ka confidence + time) — "Hello Max, papa ko call karo" ek saans mein bhi.
+        mic = WakeMic(m, GRAMMAR) { json, command -> check(json, command) }.also { it.start() }
     }
 
     private fun stopListening() {
-        speechService?.let {
-            it.stop()
-            it.shutdown() // AudioRecord release — tabhi doosra recognizer mic le paayega
-        }
-        speechService = null
-        recognizer?.close()
-        recognizer = null
+        mic?.stop() // mic chhodo — tabhi Max ka recorder mic le paayega
+        mic = null
     }
 
     private fun pauseListening() {
@@ -232,23 +227,10 @@ class WakeWordService : Service(), RecognitionListener {
         startListening()
     }
 
-    // ---------- Vosk callbacks (main thread par aate hain) ----------
+    // ---------- Vosk ka poora result (main thread par) ----------
+    // Sirf poore shabd par faisla (adhoori aawaz mein "pakka hai ya nahi" nahi hota, galti se jaagta tha).
 
-    // Adhoori (partial) aawaz par faisla nahi — usme "pakka hai ya nahi" (confidence) nahi hota, aur galti se
-    // jaag jaata tha. Sirf poora shabd sunne ke baad (thoda sa der, lekin sahi).
-    override fun onPartialResult(hypothesis: String?) {}
-
-    override fun onResult(hypothesis: String?) = check(hypothesis)
-
-    override fun onFinalResult(hypothesis: String?) = check(hypothesis)
-
-    override fun onError(exception: Exception?) {
-        DebugLog.e("Wake word error", exception)
-    }
-
-    override fun onTimeout() {}
-
-    private fun check(hypothesis: String?) {
+    private fun check(hypothesis: String?, command: ByteArray?) {
         val json = hypothesis?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
         val text = json.optString("text")
         if (text.isBlank()) return
@@ -278,7 +260,7 @@ class WakeWordService : Service(), RecognitionListener {
         lastWakeAt = now
         DebugLog.i("👂 Wake word: '$text'${if (quick) " (conversation mode)" else ""}")
         startSession()
-        onWake(quick)
+        onWake(quick, command)
     }
 
     /** Phone call / WhatsApp call chal rahi hai ya ghanti baj rahi hai. */
@@ -288,8 +270,10 @@ class WakeWordService : Service(), RecognitionListener {
             mode == AudioManager.MODE_RINGTONE || mode == AudioManager.MODE_CALL_SCREENING
     }
 
-    private fun onWake(quick: Boolean) {
+    private fun onWake(quick: Boolean, command: ByteArray?) {
         pauseListening()
+        // "Hello Max, papa ko call karo" — wake word ke saath hi bola gaya kaam panel ko de do.
+        pendingCommand = command?.let { it to SystemClock.elapsedRealtime() }
         // Phone lock / screen band: overlay window dikhti nahi, isliye alarm jaisa full-screen notification.
         if (isLockedOrScreenOff()) showFullScreenWake(quick)
         // Android 15+: background se screen kholne ke liye "Display over other apps" permission ke saath

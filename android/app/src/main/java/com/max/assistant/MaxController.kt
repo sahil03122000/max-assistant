@@ -77,7 +77,23 @@ class MaxController(
     /** "Hello Max" suna gaya — beep karo aur seedha suno. */
     /** [quick]: conversation mode mein sirf "Max" bola — greeting nahi, seedha beep aur suno. */
     fun onWake(quick: Boolean = false) {
+        val command = WakeWordService.takePendingCommand()
         start {
+            // "Hello Max, papa ko call karo" — ek saans mein bola: greeting/beep chhodo, seedha kaam.
+            if (command != null) {
+                state = MaxState.Thinking
+                val text = try {
+                    api.transcribe(command).trim()
+                } catch (e: MaxApi.ServerException) {
+                    DebugLog.e("Ek saans wali baat likhi nahi ja saki", e)
+                    ""
+                }
+                DebugLog.i("⚡ Ek saans mein: '$text'")
+                if (text.isNotBlank() && !justInterrupt.matches(text)) {
+                    handle(text, fromVoice = true)
+                    return@start
+                }
+            }
             if (!quick) greet()
             listenAndHandle(inConversation = true) // mic taiyaar hote hi "ab bolo" beep
         }
