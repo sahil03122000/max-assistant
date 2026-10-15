@@ -23,6 +23,9 @@ android {
         versionCode = 1
         versionName = "0.1"
 
+        // Sirf 64-bit ARM (aaj ke saare phones) — Voice ID/Vosk ki dusri CPU wali files se app 50+ MB bhaari hota.
+        ndk { abiFilters += "arm64-v8a" }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "MAX_SERVER_URL", "\"${maxProps.getProperty("max.serverUrl", "http://192.168.1.11:3000")}\"")
@@ -66,6 +69,9 @@ dependencies {
     // "Hello Max" wake word — offline speech recognition (Apache 2.0, commercial use free)
     implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // "Sirf meri aawaz" (Voice ID) — offline speaker recognition (Apache 2.0). Bada hai, git mein nahi:
+    //   bash android/download-voice-id.sh
+    implementation(files("libs/sherpa-onnx.aar"))
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

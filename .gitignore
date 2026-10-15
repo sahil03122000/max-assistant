@@ -15,3 +15,5 @@ captures/
 *.aab
 android/max.properties
 android/app/src/main/assets/vosk-model/
+android/app/libs/sherpa-onnx.aar
+android/app/src/main/assets/voice-id/

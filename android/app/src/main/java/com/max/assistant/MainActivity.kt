@@ -410,6 +410,7 @@ private fun SettingsDialog(
                         context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
                 }
+                VoiceIdRow()
                 Text("\"Hello Max\" par kya dikhe", style = MaterialTheme.typography.labelLarge)
                 listOf(
                     Settings.STYLE_LIGHT to "🌈 Sirf screen ke kinaron par RGB light",

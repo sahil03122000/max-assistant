@@ -209,7 +209,11 @@ class WakeWordService : Service() {
         val m = model ?: return
         if (mic != null) return
         // Apna mic loop (har shabd ka confidence + time) — "Hello Max, papa ko call karo" ek saans mein bhi.
-        mic = WakeMic(m, GRAMMAR) { json, command -> check(json, command) }.also { it.start() }
+        // Voice ID ("sirf meri aawaz") save hai to har "Hello Max" ki aawaz user se milao.
+        VoiceId.loadThreshold(this)
+        val verify: ((ShortArray) -> Float?)? =
+            if (VoiceId.isActive(this)) { pcm -> VoiceId.score(this, pcm) } else null
+        mic = WakeMic(m, GRAMMAR, verify) { json, command, score -> check(json, command, score) }.also { it.start() }
     }
 
     private fun stopListening() {
@@ -232,7 +236,7 @@ class WakeWordService : Service() {
     // ---------- Vosk ka poora result (main thread par) ----------
     // Sirf poore shabd par faisla (adhoori aawaz mein "pakka hai ya nahi" nahi hota, galti se jaagta tha).
 
-    private fun check(hypothesis: String?, command: ByteArray?) {
+    private fun check(hypothesis: String?, command: ByteArray?, voiceScore: Float? = null) {
         val json = hypothesis?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
         val text = json.optString("text")
         if (text.isBlank()) return
@@ -260,6 +264,12 @@ class WakeWordService : Service() {
             listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= greetMin }
         val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= QUICK_MIN_CONF
         if (!fullPhrase && !quick) return
+        // Sirf user ki aawaz: video/TV/doosre ka "Hello Max" — mat jaago.
+        if (voiceScore != null) {
+            val mine = voiceScore >= VoiceId.threshold
+            DebugLog.i("🔐 Aawaz milaan: ${"%.2f".format(voiceScore)} (seema ${"%.2f".format(VoiceId.threshold)}) → ${if (mine) "aap" else "koi aur — nahi jaaga"}")
+            if (!mine) return
+        }
         // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.
         if (now < ignoreUntil) return
         // Ek hi "Hello Max" se do baar trigger na ho.

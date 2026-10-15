@@ -24,7 +24,9 @@ import kotlin.math.log10
 class WakeMic(
     private val model: Model,
     private val grammar: String,
-    private val onFinal: (json: String, commandWav: ByteArray?) -> Unit,
+    /** Voice ID: "Hello Max" wali aawaz kitni user jaisi (0..1). null = check band. Mic thread par chalta hai. */
+    private val verify: ((ShortArray) -> Float?)? = null,
+    private val onFinal: (json: String, commandWav: ByteArray?, voiceScore: Float?) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private var thread: Thread? = null
@@ -72,7 +74,8 @@ class WakeMic(
                 if (recognizer.acceptWaveForm(buffer, n)) {
                     val json = recognizer.result
                     val command = commandAfterMax(json, ring, fed)
-                    main.post { onFinal(json, command) }
+                    val score = verify?.let { v -> wakePhrase(json, ring, fed)?.let { pcm -> runCatching { v(pcm) }.getOrNull() } }
+                    main.post { onFinal(json, command, score) }
                 }
             }
         } catch (e: Exception) {
@@ -103,6 +106,25 @@ class WakeMic(
         if (peakDb < COMMAND_MIN_PEAK_DB) return null // sirf chup / halka shor — koi command nahi
         DebugLog.i("⚡ 'Hello Max' ke saath hi baat: ${"%.1f".format(length / SAMPLE_RATE.toDouble())} sec")
         return wav(pcm)
+    }
+
+    /** Sirf "Hello Max" wali aawaz (pehle shabd se "max" tak, thoda aage-peeche) — Voice ID ke liye. */
+    private fun wakePhrase(json: String, ring: ShortArray, fed: Long): ShortArray? {
+        val words = runCatching { JSONObject(json).optJSONArray("result") }.getOrNull() ?: return null
+        var start = -1.0
+        var end = -1.0
+        for (i in 0 until words.length()) {
+            val w = words.getJSONObject(i)
+            val word = w.optString("word")
+            if (word == "[unk]") continue
+            if (start < 0) start = w.optDouble("start", -1.0)
+            if (word == "max") end = w.optDouble("end", -1.0)
+        }
+        if (start < 0 || end <= start) return null
+        val from = maxOf(((start - 0.2) * SAMPLE_RATE).toLong(), fed - RING, 0L)
+        val to = minOf(((end + 0.2) * SAMPLE_RATE).toLong(), fed)
+        if (to - from < SAMPLE_RATE / 2) return null
+        return ShortArray((to - from).toInt()) { ring[((from + it) % RING).toInt()] }
     }
 
     private fun wav(samples: ShortArray): ByteArray {
