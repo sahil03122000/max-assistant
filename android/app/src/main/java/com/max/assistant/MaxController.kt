@@ -160,13 +160,16 @@ class MaxController(
         stop()
         speaker.shutdown()
         WakeWordService.resume(holdTag)
+        MediaPause.release(activity, holdTag)
     }
 
     private fun start(block: suspend () -> Unit) {
         stop()
         val runId = ++currentRun
-        // Max bol/sun raha hai tab "Hello Max" wala mic chhod de.
+        // Max bol/sun raha hai tab "Hello Max" wala mic chhod de, aur chalti video/gaana ruka rahe.
         WakeWordService.pause(holdTag)
+        MediaPause.hold(activity, holdTag)
+        MediaPause.release(activity, WakeWordService.WAKE_MEDIA_HOLD)
         job = scope.launch {
             try {
                 block()
@@ -194,6 +197,7 @@ class MaxController(
                     state = MaxState.Idle
                     partialText = ""
                     WakeWordService.resume(holdTag)
+                    MediaPause.release(activity, holdTag) // kaam khatam → video wahin se chalu
                 }
             }
         }

@@ -42,6 +42,7 @@ class WakeWordService : Service() {
         private const val RESUME_QUIET_MS = 2000L
         private const val SESSION_IDLE_MS = 3 * 60 * 1000L
         // Kitna pakka suna ho tab jaago (0..1). Galti se jaage to badhao, sune nahi to ghatao.
+        const val WAKE_MEDIA_HOLD = "wake"
         private const val PHRASE_MIN_CONF = 0.70
         private const val QUICK_MIN_CONF = 0.90
         private val SESSION_PHRASE = Regex("""\bmax\b""")
@@ -272,6 +273,8 @@ class WakeWordService : Service() {
 
     private fun onWake(quick: Boolean, command: ByteArray?) {
         pauseListening()
+        // Chalti video/reel turant roko (panel khulne ka intezaar nahi) — panel khud apni rok le lega.
+        MediaPause.hold(this, WAKE_MEDIA_HOLD, autoReleaseMs = 10_000)
         // "Hello Max, papa ko call karo" — wake word ke saath hi bola gaya kaam panel ko de do.
         pendingCommand = command?.let { it to SystemClock.elapsedRealtime() }
         // Phone lock / screen band: overlay window dikhti nahi, isliye alarm jaisa full-screen notification.
