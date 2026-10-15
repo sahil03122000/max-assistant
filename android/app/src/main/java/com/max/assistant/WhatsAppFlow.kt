@@ -40,7 +40,8 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
         openHome(pkg, option)
         // Naye WhatsApp mein upar "Ask Meta AI or Search" bar hi search hai — usme sirf naam likhte hain
         // (Enter nahi dabate), to chats/contacts dikhte hain, Meta AI se kuch nahi poochha jaata.
-        val searchButton = findById("menuitem_search", "my_search_bar", "search_bar", "search_entry", "search_bar_container")
+        // OnePlus/WhatsApp 2026: tap hone wala hissa "search_bar_inner_layout" hai ("my_search_bar" khud clickable nahi).
+        val searchButton = findById("search_bar_inner_layout", "menuitem_search", "search_text", "my_search_bar", "search_bar")
             ?: service.find(listOf("search"))
             ?: throw IllegalStateException("WhatsApp mein search button nahi mila")
         DebugLog.i("🔍 Search button: id=${searchButton.viewIdResourceName?.substringAfterLast('/')}")

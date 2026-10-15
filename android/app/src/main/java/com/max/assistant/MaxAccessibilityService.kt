@@ -163,11 +163,18 @@ class MaxAccessibilityService : AccessibilityService() {
 
     /** Button dabao — khud clickable na ho to uska clickable parent; wo bhi na ho to uski jagah tap. */
     suspend fun click(node: AccessibilityNodeInfo): Boolean {
-        var target: AccessibilityNodeInfo? = node
-        while (target != null && !target.isClickable) target = target.parent
-        if (target != null && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
-        val r = Rect().also { node.getBoundsInScreen(it) }
-        return tap(r.exactCenterX(), r.exactCenterY())
+        val bounds = Rect().also { node.getBoundsInScreen(it) }
+        if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        // Clickable parent tabhi jab wo lagbhag isi jitna ho — warna (jaise poori chat list) galat jagah click hota tha.
+        var parent = node.parent
+        while (parent != null && !parent.isClickable) parent = parent.parent
+        if (parent != null) {
+            val p = Rect().also { parent.getBoundsInScreen(it) }
+            val small = p.width() * p.height() <= 4 * maxOf(1, bounds.width() * bounds.height())
+            if (small && parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        }
+        // Seedha us button ki jagah par ungli se tap.
+        return tap(bounds.exactCenterX(), bounds.exactCenterY())
     }
 
     /** Screen par (x, y) jagah ungli se tap. */
