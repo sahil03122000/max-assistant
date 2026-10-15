@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.audiofx.AcousticEchoCanceler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -32,15 +31,12 @@ class VoiceRecorder {
         onLevel: (Float) -> Unit = {},
     ): ByteArray? = withContext(Dispatchers.IO) {
         val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        // VOICE_RECOGNITION = saaf "speech" mic (Max is waqt chup hai, echo cancel ki zaroorat nahi). Pehle
+        // VOICE_COMMUNICATION (video call wala) tha — wo shuru ki aawaz dabata tha aur pehla shabd kat jaata tha.
         val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION, SAMPLE_RATE,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, FRAME * 8),
         )
-        val echoCanceler = if (AcousticEchoCanceler.isAvailable()) {
-            AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
-        } else {
-            null
-        }
         try {
             record.startRecording()
             val frame = ShortArray(FRAME)
@@ -73,13 +69,15 @@ class VoiceRecorder {
                 val db = rmsDb(chunk, n)
                 frames++
                 onLevel(((db - floor) / 30).toFloat().coerceIn(0f, 1f))
-                if (skip > 0) {
-                    skip--
-                    continue
-                }
                 if (!started) {
+                    // Beep ke dauraan bhi aawaz rakh lo — user aksar beep ke saath hi bolna shuru karta hai
+                    // (pehle ye hissa phenk diya jaata tha aur "Chinna ko" → "Go" sunai deta tha).
                     preRoll.addLast(chunk)
                     while (preRoll.size > PRE_ROLL_FRAMES) preRoll.removeFirst()
+                    if (skip > 0) {
+                        skip-- // beep ko bolna shuru mat samjho, bas
+                        continue
+                    }
                     loud = if (db > startDb) loud + 1 else 0
                     if (loud >= START_FRAMES) {
                         started = true
@@ -98,7 +96,6 @@ class VoiceRecorder {
         } finally {
             runCatching { record.stop() }
             record.release()
-            echoCanceler?.release()
         }
     }
 
@@ -128,7 +125,7 @@ class VoiceRecorder {
         const val FRAME_MS = 20L
         const val CALIBRATE_FRAMES = 12 // 0.24 sec
         const val BEEP_SKIP_FRAMES = 12 // beep ~0.2 sec
-        const val PRE_ROLL_FRAMES = 20 // 0.4 sec
+        const val PRE_ROLL_FRAMES = 40 // 0.8 sec
         const val START_FRAMES = 4 // 80 ms lagatar aawaz
         const val END_SILENCE_FRAMES = 50 // 1 sec chup
         const val MAX_SECONDS = 15

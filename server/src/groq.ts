@@ -125,17 +125,34 @@ function toJsonSchema(schema: Schema | undefined): Record<string, unknown> {
 }
 
 /** Groq Whisper: aawaz → text (Max ke bolte waqt user ne jo bola). */
+// Poora (large-v3) zyada sahi likhta hai — "Chinna ko ... hi bhejo" turbo ne "r hi" / "video" suna tha.
+// Limit/busy ho to turbo.
+const WHISPER_MODELS = ["whisper-large-v3", "whisper-large-v3-turbo"];
+
 export async function groqTranscribe(wav: Buffer): Promise<string> {
+  let lastError: unknown;
+  for (const model of WHISPER_MODELS) {
+    try {
+      return await whisper(model, wav);
+    } catch (err) {
+      lastError = err;
+      console.warn(`  🎙️ ${model} fail (${err instanceof Error ? err.message.slice(0, 60) : err}), agla...`);
+    }
+  }
+  throw lastError;
+}
+
+async function whisper(model: string, wav: Buffer): Promise<string> {
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(wav)], { type: "audio/wav" }), "speech.wav");
-  form.append("model", "whisper-large-v3-turbo");
+  form.append("model", model);
   form.append("temperature", "0");
   // Whisper "prompt" jaisi style mein likhta hai — Roman Hinglish example do, taaki Devanagari na de
   // aur English shabd English spelling mein aayein ("how are you", na ki "hau aar yoo").
   form.append(
     "prompt",
-    "Haan, theek hai. Hello Max, papa ko call karo. Chinna ko WhatsApp pe message bhejo: hi, how are you? " +
-      "Kal subah 7 baje ka alarm lagao. Nahi, rehne do.",
+    "Haan, theek hai. Hello Max, papa ko call karo. Chinna ko WhatsApp pe hi bhejo. Rahul ko message bhejo: how are you? " +
+      "Kal subah 7 baje ka alarm lagao. Nahi, rehne do. Bhej do.",
   );
   const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
     method: "POST",
