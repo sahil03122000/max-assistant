@@ -22,6 +22,26 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
         const val NORMAL = "com.whatsapp"
         const val BUSINESS = "com.whatsapp.w4b"
 
+        /** Dual/clone WhatsApp ke label mein ye shabd hote hain ("WhatsApp (Clone)", "Dual WhatsApp"). */
+        private val CLONE_WORDS = listOf("clone", "dual", "parallel", "twin", "second")
+
+        /** "Kaunse WhatsApp se?" list ([labels]) mein user ki pasand ([wanted]) ka index. */
+        fun pickWhatsApp(labels: List<String>, wanted: String): Int {
+            val w = wanted.trim().lowercase()
+            val isClone = { label: String -> CLONE_WORDS.any { label.lowercase().contains(it) } }
+            val normalIndex = labels.indexOfFirst { !isClone(it) }.takeIf { it >= 0 } ?: 0
+            val cloneIndex = labels.indexOfFirst(isClone).takeIf { it >= 0 } ?: 1
+            return when {
+                // "normal"/"original" = jisme "Clone" NAHI likha (pehle milte-julte akshar se galti se Clone chun liya tha).
+                w.contains("normal") || w.contains("original") || w.contains("asli") -> normalIndex
+                CLONE_WORDS.any { w.contains(it) } -> cloneIndex
+                w.toIntOrNull() != null -> w.toInt() - 1
+                w.contains("pehl") || w.contains("first") -> 0
+                w.contains("dusr") || w.contains("doosr") -> 1
+                else -> labels.indexOfFirst { it.lowercase().contains(w) }.takeIf { it >= 0 } ?: normalIndex
+            }.coerceIn(0, maxOf(0, labels.lastIndex))
+        }
+
         private val CHAT_NAME_IDS = listOf(
             "conversations_row_contact_name", "contactpicker_row_name", "contact_name", "chat_able_contacts_row_name",
         )
@@ -189,13 +209,7 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
             service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
             throw ChooserNeeded(labels)
         }
-        val index = when {
-            wanted.toIntOrNull() != null -> wanted.toInt() - 1
-            wanted.contains("pehl") || wanted.contains("first") || wanted.contains("original") -> 0
-            wanted.contains("dusr") || wanted.contains("doosr") || wanted.contains("second") -> 1
-            else -> labels.indexOfFirst { it.lowercase().contains(wanted) }.takeIf { it >= 0 }
-                ?: labels.indices.maxByOrNull { NameMatcher.similarity(wanted, labels[it]) } ?: 0
-        }.coerceIn(0, nodes.lastIndex)
+        val index = pickWhatsApp(labels, wanted)
         DebugLog.i("📲 Chuna: ${labels[index]}")
         service.click(nodes[index])
         // "Hamesha / Sirf ek baar" puchhe to "Just once" — default mat badlo.
