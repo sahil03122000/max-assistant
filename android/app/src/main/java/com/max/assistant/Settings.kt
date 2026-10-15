@@ -38,6 +38,14 @@ class Settings(context: Context) {
         get() = prefs.getString("phone_voice", null) ?: "en-in-x-enc-local"
         set(value) = prefs.edit { putString("phone_voice", value) }
 
+    /**
+     * Sunne ka tareeka: [ENGINE_WHISPER] = Max khud record kare, server (Groq Whisper) likhe — Hinglish sahi;
+     * [ENGINE_GOOGLE] = phone ka Google recognizer (bina server ke bhi, lekin Hinglish mein kamzor).
+     */
+    var listenEngine: String
+        get() = prefs.getString("listen_engine", null) ?: ENGINE_WHISPER
+        set(value) = prefs.edit { putString("listen_engine", value) }
+
     /** Speech recognition ki bhasha: "hi-IN" (Hindi/Hinglish) ya "en-IN" (English). */
     var language: String
         get() = prefs.getString("language", null) ?: "hi-IN"
@@ -47,6 +55,8 @@ class Settings(context: Context) {
         const val PHONE_VOICE = "phone"
         const val STYLE_LIGHT = "light"
         const val STYLE_PANEL = "panel"
+        const val ENGINE_WHISPER = "whisper"
+        const val ENGINE_GOOGLE = "google"
 
         /** Server ki aawazein (server/src/tts.ts ke VOICES jaisi) + phone ki offline aawaz. */
         val VOICES = listOf(

@@ -374,6 +374,7 @@ private fun SettingsDialog(
     var phoneVoice by remember { mutableStateOf(settings.phoneVoice) }
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
     var activeStyle by remember { mutableStateOf(settings.activeStyle) }
+    var listenEngine by remember { mutableStateOf(settings.listenEngine) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -466,7 +467,22 @@ private fun SettingsDialog(
                         Text(label)
                     }
                 }
-                Text("Sunne ki bhasha", style = MaterialTheme.typography.labelLarge)
+                Text("Sunne ka tareeka", style = MaterialTheme.typography.labelLarge)
+                listOf(
+                    Settings.ENGINE_WHISPER to "Whisper — Hinglish sahi likhta hai (recommended, server chahiye)",
+                    Settings.ENGINE_GOOGLE to "Google — phone ka apna (Hinglish mein kamzor)",
+                ).forEach { (id, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = listenEngine == id, onClick = { listenEngine = id }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = listenEngine == id, onClick = { listenEngine = id })
+                        Text(label)
+                    }
+                }
+                Text("Sunne ki bhasha (sirf Google ke liye)", style = MaterialTheme.typography.labelLarge)
                 listOf(
                     "hi-IN" to "Hindi / Hinglish — sabse sahi sunta hai, likhai Roman mein (recommended)",
                     "en-IN" to "English — Hindi shabd (haan, nahi) kam samajhta hai",
@@ -489,6 +505,7 @@ private fun SettingsDialog(
                 settings.language = language
                 settings.voice = voice
                 settings.activeStyle = activeStyle
+                settings.listenEngine = listenEngine
                 settings.phoneVoice = phoneVoice
                 if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
                 onDismiss()

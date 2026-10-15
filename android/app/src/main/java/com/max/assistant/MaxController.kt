@@ -204,19 +204,14 @@ class MaxController(
             }
             if (isEcho) DebugLog.i("Ye Max ki apni goonj thi — ignore")
         }
-        if (!speech.isAvailable()) {
+        if (settings.listenEngine == Settings.ENGINE_GOOGLE && !speech.isAvailable()) {
             say("Is phone par speech recognition available nahi hai. Google app install ya update karo.")
             return
         }
         // Wake word service ko mic chhodne ka thoda time do.
         if (WakeWordService.isRunning) delay(300)
         state = MaxState.Listening
-        val text = speech.listen(
-            settings.language,
-            onLevel = { micLevel = it },
-            // Beep tabhi jab mic sach mein sun raha ho — pehle bajne se user ke shuru ke shabd kat jaate the.
-            onReady = { if (beepWhenReady) beepNow() },
-        ) { partialText = Hinglish.romanize(it) }
+        val text = hear(beep = beepWhenReady)
         micLevel = 0f
         partialText = ""
         if (text.isNullOrBlank()) {
@@ -243,6 +238,36 @@ class MaxController(
         }
         handle(text, fromVoice = true)
     }
+
+    /**
+     * User ki ek baat sunna. Default: Max khud record kare aur server (Groq Whisper) likhe — Hinglish sahi aata hai
+     * ("how are you", "haan"). Setting mein Google chuna ho to phone ka recognizer.
+     */
+    private suspend fun hear(beep: Boolean, timeoutMs: Long = 8_000): String? {
+        if (settings.listenEngine == Settings.ENGINE_WHISPER) {
+            val wav = recorder.record(
+                startTimeoutMs = timeoutMs,
+                // Beep tabhi jab mic sach mein sun raha ho — pehle bajne se user ke shuru ke shabd kat jaate the.
+                onReady = { if (beep) beepNow() },
+                onLevel = { micLevel = it },
+            ) ?: return null
+            if (state == MaxState.Listening) state = MaxState.Thinking // likha ja raha hai...
+            return try {
+                api.transcribe(wav).trim().ifBlank { null }
+            } catch (e: MaxApi.ServerException) {
+                DebugLog.e("Whisper se likha nahi gaya", e)
+                null
+            }
+        }
+        if (!speech.isAvailable()) return null
+        return speech.listen(
+            settings.language,
+            onLevel = { micLevel = it },
+            onReady = { if (beep) beepNow() },
+        ) { partialText = Hinglish.romanize(it) }
+    }
+
+    private val recorder = VoiceRecorder()
 
     /** Bolo aur dikhao, lekin history mein save mat karo ("aap wahan hain?" jaisi baatein). */
     private suspend fun sayOnly(text: String) {
@@ -503,7 +528,7 @@ class MaxController(
             delay(600) // user ki pichhli baat ki goonj khatam hone do
             while (isActive) {
                 val heard = try {
-                    speech.listen(settings.language) {}
+                    hear(beep = false, timeoutMs = 20_000)
                 } catch (e: SpeechInput.SpeechException) {
                     delay(500)
                     null

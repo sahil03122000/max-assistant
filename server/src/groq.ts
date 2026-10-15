@@ -130,6 +130,13 @@ export async function groqTranscribe(wav: Buffer): Promise<string> {
   form.append("file", new Blob([new Uint8Array(wav)], { type: "audio/wav" }), "speech.wav");
   form.append("model", "whisper-large-v3-turbo");
   form.append("temperature", "0");
+  // Whisper "prompt" jaisi style mein likhta hai — Roman Hinglish example do, taaki Devanagari na de
+  // aur English shabd English spelling mein aayein ("how are you", na ki "hau aar yoo").
+  form.append(
+    "prompt",
+    "Haan, theek hai. Hello Max, papa ko call karo. Chinna ko WhatsApp pe message bhejo: hi, how are you? " +
+      "Kal subah 7 baje ka alarm lagao. Nahi, rehne do.",
+  );
   const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
     method: "POST",
     headers: { authorization: `Bearer ${config.GROQ_API_KEY}` },
