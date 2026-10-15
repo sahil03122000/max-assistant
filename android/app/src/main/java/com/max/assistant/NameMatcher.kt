@@ -49,6 +49,21 @@ object NameMatcher {
         return consonants.fold(StringBuilder()) { sb, ch -> if (sb.lastOrNull() != ch) sb.append(ch); sb }.toString()
     }
 
+    /**
+     * Aawaz ka roop: vyanjan wahi, har swar "*" — Hindi/English spelling ka farak mit jaata hai:
+     * "Mummy", "mammee", "Mommi" → "m*m*"; "Chinna", "Cheena" → "ch*n*". "Home" → "h*m*" (alag).
+     */
+    fun shape(name: String): String {
+        val n = normalize(name).replace("ph", "f").replace("w", "v").replace("z", "j")
+        val out = StringBuilder()
+        n.forEachIndexed { i, ch ->
+            val vowel = ch in "aeiou" || ch == 'y' && i == n.lastIndex
+            val c = if (vowel) '*' else ch
+            if (out.lastOrNull() != c) out.append(c)
+        }
+        return out.toString()
+    }
+
     /** 0..1, kitna milta-julta hai. */
     fun similarity(a: String, b: String): Double {
         val na = normalize(a)
@@ -57,7 +72,8 @@ object NameMatcher {
         val full = ratio(na, nb)
         val sa = skeleton(a)
         val sb = skeleton(b)
-        val bones = if (sa.isNotEmpty() && sb.isNotEmpty()) ratio(sa, sb) * 0.9 else 0.0
+        // Ek akshar ka dhancha ("mom" → "m", "home" → "m") kuch nahi batata — Mummy ki jagah Home lag jaata tha.
+        val bones = if (sa.length >= 2 && sb.length >= 2) ratio(sa, sb) * 0.9 else 0.0
         return maxOf(full, bones)
     }
 
@@ -77,11 +93,16 @@ object NameMatcher {
         val qWords = toLatin(query).lowercase().split(Regex("\\s+")).map { normalize(it) }.filter { it.isNotEmpty() }
         val related = names.filter { name ->
             val words = toLatin(name).lowercase().split(Regex("\\s+")).map { normalize(it) }
-            words.any { it == q } || qWords.all { qw -> words.any { it == qw } } || (q.length >= 3 && normalize(name).contains(q))
+            // Shabd ki shuruaat se hi ("papa" → "Papaji"). Poore naam ke beech mein nahi — "rima" ko
+            // "Gayatri Mam" (gayat-RI MAm) mil jaata tha.
+            words.any { it == q } || qWords.all { qw -> words.any { it == qw } } ||
+                (q.length >= 3 && words.any { it.startsWith(q) })
         }
         (sameName + related).distinct().takeIf { it.isNotEmpty() }?.let { return it }
         val qs = skeleton(query)
         if (qs.length >= 2) names.filter { skeleton(it) == qs }.takeIf { it.isNotEmpty() }?.let { return it }
+        val qShape = shape(query)
+        if (qShape.length >= 3) names.filter { shape(it) == qShape }.takeIf { it.isNotEmpty() }?.let { return it }
         return names.filter { similarity(query, it) >= 0.8 }
     }
 

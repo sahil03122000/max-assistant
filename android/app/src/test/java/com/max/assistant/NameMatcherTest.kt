@@ -32,6 +32,16 @@ class NameMatcherTest {
     }
 
     @Test
+    fun soundAlikeSpellingsFindRightContact() {
+        val phone = contacts + listOf("Home", "Spicejet Hr Gayatri Mam", "Cheena", "Chenna")
+        assertEquals(listOf("Mummy"), NameMatcher.match("Mommi", phone))
+        assertEquals(listOf("Mummy"), NameMatcher.match("mammee", phone))
+        assertTrue("Home" !in NameMatcher.match("Mom", phone))
+        assertTrue(NameMatcher.match("rima", phone).isEmpty())
+        assertEquals(listOf("Cheena", "Chenna"), NameMatcher.match("Chinna", phone))
+    }
+
+    @Test
     fun unknownNameGivesNoMatchButSuggestions() {
         assertTrue(NameMatcher.match("abc", contacts).isEmpty())
         val suggestions = NameMatcher.suggest("abc", contacts)

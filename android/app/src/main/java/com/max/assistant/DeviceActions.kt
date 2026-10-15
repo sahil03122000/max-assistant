@@ -237,6 +237,8 @@ class DeviceActions(
                         "User ko ye naam batao aur poocho kisko.",
                 )
             }
+            // Alag naam par number ek hi ("Cheena", "Chenna" = ek insaan) — poochhna bekaar, seedha.
+            matches.map { it.number.filter(Char::isDigit).takeLast(10) }.distinct().size == 1 -> block(matches.first())
             names.size > 1 -> Outcome(
                 false,
                 error = "'$query' se ${names.size} contacts mile: ${names.take(5).joinToString()}. " +
