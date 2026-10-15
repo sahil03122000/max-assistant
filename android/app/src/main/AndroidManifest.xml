@@ -9,6 +9,8 @@
     <!-- "Papa ko call karo" — contact dhundhna aur call lagana -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Max khud call par baat kare (experiment): call speaker par karna -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Alarm/timer clock app mein lagana -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Reminder ki notification -->

@@ -11,13 +11,14 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Server se aayi natural aawaz (WAV) bajata hai aur khatam hone tak wait karta hai. */
-class VoicePlayer(private val context: Context) {
+/** [usage]: aam taur par assistant; call par (speaker se saamne wale ko sunana) VOICE_COMMUNICATION. */
+class VoicePlayer(private val context: Context, private val usage: Int = AudioAttributes.USAGE_ASSISTANT) {
     private var player: MediaPlayer? = null
     // Beech mein [stop] ho (user ne "Max stop" bola) to play() wala intezaar bhi khatam ho.
     private var onStopped: (() -> Unit)? = null
 
     suspend fun play(wav: ByteArray) {
-        val file = File(context.cacheDir, "max_voice.wav")
+        val file = File(context.cacheDir, "max_voice_$usage.wav")
         withContext(Dispatchers.IO) { file.writeBytes(wav) }
 
         suspendCancellableCoroutine { cont ->
@@ -31,7 +32,7 @@ class VoicePlayer(private val context: Context) {
             try {
                 mp.setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                        .setUsage(usage)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build(),
                 )

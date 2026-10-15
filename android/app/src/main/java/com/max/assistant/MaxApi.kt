@@ -44,6 +44,18 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
         }
     }
 
+    /** EXPERIMENT (call par Max): ab tak ki baat-cheet → agli line { say, done }. */
+    suspend fun callTurn(callee: String, owner: String, goal: String, transcript: JSONArray): JSONObject =
+        JSONObject(
+            String(
+                request(
+                    "/v1/call/turn",
+                    JSONObject().put("callee", callee).put("owner", owner).put("goal", goal).put("transcript", transcript),
+                    readTimeoutMs = 30_000,
+                ),
+            ),
+        )
+
     /** Text → natural aawaz (WAV bytes). */
     suspend fun tts(text: String, voice: String): ByteArray =
         request("/v1/tts", JSONObject().put("text", text).put("voice", voice), readTimeoutMs = 20_000)

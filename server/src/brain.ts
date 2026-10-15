@@ -8,7 +8,7 @@
 //
 // Server tools (memory) beech mein khud chal jaate hain, phone ko pata bhi nahi chalta.
 import { randomUUID } from "node:crypto";
-import { ApiError, GoogleGenAI, type Content, type FunctionCall, type Part } from "@google/genai";
+import { ApiError, GoogleGenAI, type Content, type FunctionCall, type FunctionDeclaration, type Part } from "@google/genai";
 import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
 import { groqEnabled, GroqError, groqThink } from "./groq.js";
@@ -164,14 +164,15 @@ async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Pr
   return args;
 }
 
-async function think(history: Content[], systemInstruction: string): Promise<Content> {
+/** [tools] khaali = sirf baat (jaise call par Max ki line), koi kaam nahi. */
+export async function think(history: Content[], systemInstruction: string, tools: FunctionDeclaration[] = ALL_TOOLS): Promise<Content> {
   // Pehle Groq (free, ~1 sec). Limit/busy ho to Gemini.
   if (groqEnabled()) {
     for (const model of config.GROQ_MODELS) {
       const key = `groq:${model}`;
       if ((limitHitUntil.get(key) ?? 0) > Date.now()) continue;
       try {
-        return await groqThink(model, history, systemInstruction, ALL_TOOLS);
+        return await groqThink(model, history, systemInstruction, tools);
       } catch (err) {
         if (err instanceof GroqError && err.status === 429) {
           // Groq free: ~8000 tokens/minute (jaldi khulti hai) aur ~1000 requests/din. Message mein
@@ -199,7 +200,11 @@ async function think(history: Content[], systemInstruction: string): Promise<Con
         model,
         contents: history,
         // Google ka call kabhi atak jaata hai — 15 sec mein jawab na aaye to chhodo, agla model.
-        config: { systemInstruction, tools: [{ functionDeclarations: ALL_TOOLS }], abortSignal: AbortSignal.timeout(15_000) },
+        config: {
+          systemInstruction,
+          ...(tools.length ? { tools: [{ functionDeclarations: tools }] } : {}),
+          abortSignal: AbortSignal.timeout(15_000),
+        },
       });
       const content = res.candidates?.[0]?.content;
       // Kaam (jaise gaana) ke baad AI kabhi kuch bolna zaroori nahi samajhta — error nahi, chhota sa "Theek hai".

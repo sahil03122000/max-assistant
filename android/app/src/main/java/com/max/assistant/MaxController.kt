@@ -60,7 +60,15 @@ class MaxController(
     private val speech = SpeechInput(activity)
     private val speaker = Speaker(activity)
     private val voicePlayer = VoicePlayer(activity)
-    private val actions = DeviceActions(activity)
+    private val actions = DeviceActions(
+        activity,
+        CallTalker(
+            activity, api,
+            voice = { settings.voice.takeIf { it != Settings.PHONE_VOICE } ?: "Orus" },
+            phoneVoice = { settings.phoneVoice },
+            owner = { profiles.load().let { it.firstName.ifBlank { it.displayName } }.ifBlank { "mere user" } },
+        ),
+    )
 
     // Ek app session = ek baat-cheet. App band karke kholo to nayi.
     private val sessionId = UUID.randomUUID().toString()

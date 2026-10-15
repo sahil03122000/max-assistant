@@ -10,6 +10,7 @@ import { timingSafeEqual } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { handleActionResults, handleUserMessage, HttpError, type TurnResult } from "./brain.js";
+import { nextCallLine } from "./callTalk.js";
 import { config } from "./config.js";
 import { memoryBackend, memoryStore } from "./memory.js";
 import { getSession } from "./sessions.js";
@@ -84,6 +85,23 @@ function logTurn(turn: TurnResult): TurnResult {
   if (turn.reply) console.log(`🤖 ${turn.reply}`);
   return turn;
 }
+
+const CallTurnBody = z.object({
+  callee: z.string().trim().min(1).max(80),
+  owner: z.string().trim().min(1).max(60).default("Sahil"),
+  goal: z.string().trim().min(1).max(500),
+  transcript: z.array(z.object({ who: z.enum(["max", "them"]), text: z.string().trim().max(1000) })).max(30),
+});
+
+// EXPERIMENT: Max call par khud baat kar raha hai — agli line kya bole.
+app.post("/v1/call/turn", async (req, res) => {
+  const body = CallTurnBody.parse(req.body);
+  const last = body.transcript.at(-1);
+  if (last?.who === "them") console.log(`📞 ${body.callee}: ${last.text}`);
+  const turn = await nextCallLine(body);
+  console.log(`📞 Max: ${turn.say}${turn.done ? "  [END]" : ""}`);
+  res.json(turn);
+});
 
 const TtsBody = z.object({
   text: z.string().trim().min(1).max(1500),

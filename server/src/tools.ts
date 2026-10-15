@@ -27,6 +27,25 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     parameters: { type: Type.OBJECT, properties: { contact_name: contactName, exact_name: exactName }, required: ["contact_name"] },
   },
   {
+    name: "call_and_talk",
+    description:
+      "EXPERIMENT: Max khud contact ko call karke speaker par user ki taraf se baat karega aur jawab sun ke laayega. " +
+      "Tab use karo jab user bole 'X ko call karke bol do ...' / 'X se pooch ke batao ...'. Sirf call lagani ho to call_contact. " +
+      "Result mein poori baat-cheet aayegi — user ko 1-2 line mein batao X ne kya kaha.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        contact_name: contactName,
+        exact_name: exactName,
+        goal: {
+          type: Type.STRING,
+          description: "Call par kya kehna/poochhna hai, saaf likho, jaise 'Batana hai Sahil 10 minute late aayega' ya 'Poochhna hai khana bana ya nahi'.",
+        },
+      },
+      required: ["contact_name", "goal"],
+    },
+  },
+  {
     name: "send_sms",
     description: "Kisi contact ko SMS bhejo.",
     parameters: {

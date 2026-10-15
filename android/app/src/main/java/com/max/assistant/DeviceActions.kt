@@ -21,7 +21,11 @@ import java.time.OffsetDateTime
  * Max ke "haath": server jo kaam maangta hai (call_contact, set_alarm...) wo yahan phone par hote hain.
  * Naam server/src/tools.ts ke DEVICE_TOOLS se match hone chahiye.
  */
-class DeviceActions(private val context: Context) {
+class DeviceActions(
+    private val context: Context,
+    /** Max khud call par baat kare (experiment) — null = ye kaam supported nahi. */
+    private val callTalker: CallTalker? = null,
+) {
 
     /**
      * ok/result/error server ko wapas jaata hai. [launch] wala screen Max ke bolne ke BAAD khulta hai —
@@ -44,6 +48,7 @@ class DeviceActions(private val context: Context) {
             "whatsapp_search" -> whatsAppSearch(args)
             "whatsapp_send" -> whatsAppSend(args)
             "call_contact" -> callContact(args)
+            "call_and_talk" -> callAndTalk(args)
             "send_sms" -> sendSms(args)
             "send_whatsapp" -> sendWhatsApp(args)
             "set_alarm" -> setAlarm(args)
@@ -145,6 +150,17 @@ class DeviceActions(private val context: Context) {
             val intent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", c.number, null))
             Outcome(true, result = "${c.name} ko call lag rahi hai", launch = intent)
         }
+    }
+
+    private suspend fun callAndTalk(args: JSONObject): Outcome {
+        requirePermission(Manifest.permission.CALL_PHONE, "Call karne ki permission nahi di gayi hai")
+        val talker = callTalker ?: return Outcome(false, error = "Call par baat abhi yahan supported nahi")
+        val goal = args.optString("goal").trim()
+        if (goal.isEmpty()) return Outcome(false, error = "Call par kya bolna hai ye nahi pata — user se poocho")
+        var contact: Contact? = null
+        val check = withContact(args) { c -> contact = c; Outcome(true) }
+        val c = contact ?: return check
+        return talker.talk(c.name, c.number, goal)
     }
 
     private fun sendSms(args: JSONObject): Outcome {

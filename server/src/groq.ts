@@ -37,10 +37,15 @@ export async function groqThink(
     body: JSON.stringify({
       model,
       messages: toMessages(history, systemInstruction),
-      tools: tools.map((t) => ({
-        type: "function",
-        function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
-      })),
+      // Khaali tools Groq nahi maanta — sirf baat wale kaam (call par Max) mein bhejo hi mat.
+      ...(tools.length
+        ? {
+            tools: tools.map((t) => ({
+              type: "function",
+              function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
+            })),
+          }
+        : {}),
       temperature: 0.6,
       max_completion_tokens: 600,
     }),
