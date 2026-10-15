@@ -100,7 +100,11 @@ class DeviceActions(private val context: Context) {
         }
         return when (result.names.size) {
             0 -> Outcome(false, error = "WhatsApp mein '$query' naam ki koi chat nahi mili. User se sahi naam poocho.")
-            1 -> Outcome(true, result = "Ek chat mili: ${result.names[0]}. Ab message confirm karke whatsapp_send karo.")
+            1 -> Outcome(
+                true,
+                result = "Ek chat mili, uska exact naam: \"${result.names[0]}\". Ise user ko batao (agar user ke bole naam se alag hai to " +
+                    "confirm karo ki yahi hai), phir whatsapp_send mein chat=\"${result.names[0]}\" do.",
+            )
             else -> Outcome(
                 true,
                 result = "${result.names.size} chats mili: " +

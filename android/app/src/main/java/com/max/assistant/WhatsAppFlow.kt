@@ -45,14 +45,29 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
             ?: throw IllegalStateException("WhatsApp search box nahi mila")
         setText(input, query)
         delay(1500) // results aane do
+        service.logIds("WhatsApp search results")
 
-        val names = chatNames()
-            .filter { NameMatcher.similarity(query, it) >= 0.5 || it.contains(query, ignoreCase = true) || query.contains(it, ignoreCase = true) }
-            .distinct()
-            .take(6)
+        var names = matching(query)
+        if (names.isEmpty() && query.length > 2) {
+            // WhatsApp sirf spelling milata hai — "China" se "Cheena" nahi milta. Pehle 2 akshar se dhundh ke
+            // milte-julte naam chuno (Hindi/English spelling ka farak NameMatcher sambhalta hai).
+            setText(input, query.take(2))
+            delay(1500)
+            names = chatNames()
+                .filter { NameMatcher.similarity(query, it) >= 0.55 }
+                .sortedByDescending { NameMatcher.similarity(query, it) }
+                .distinct()
+                .take(6)
+        }
         DebugLog.i("🔍 WhatsApp search: ${names.size} chat mile")
         return SearchResult(names)
     }
+
+    private fun matching(query: String): List<String> =
+        chatNames()
+            .filter { it.contains(query, ignoreCase = true) || NameMatcher.similarity(query, it) >= 0.55 }
+            .distinct()
+            .take(6)
 
     /** [chat] wali chat kholo (search results se; na mile to dobara search), [message] likho, Send. */
     suspend fun send(pkg: String, chat: String, message: String, option: String? = null) {
@@ -160,7 +175,8 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
         service.allNodes()
             .filter { node -> CHAT_NAME_IDS.any { node.viewIdResourceName.orEmpty().endsWith(":id/$it") } }
             .mapNotNull { it.text?.toString()?.trim() }
-            .filter { it.isNotEmpty() }
+            // "A", "B" jaise list ke headings chat nahi hain.
+            .filter { it.length >= 2 }
 
     private fun findChatRow(chat: String): AccessibilityNodeInfo? {
         val rows = service.allNodes().filter { node -> CHAT_NAME_IDS.any { node.viewIdResourceName.orEmpty().endsWith(":id/$it") } }
