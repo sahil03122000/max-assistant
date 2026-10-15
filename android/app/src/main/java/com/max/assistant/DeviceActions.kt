@@ -88,7 +88,8 @@ class DeviceActions(private val context: Context) {
         val (pkg, problem) = whatsAppPackage(args)
         problem?.let { return it }
         val query = args.optString("name").trim().ifEmpty { return Outcome(false, error = "Kisko dhundhna hai, naam nahi mila") }
-        val option = args.optString("which_whatsapp").ifBlank { null }
+        // User hamesha wala WhatsApp (Settings) — har baar "normal ya clone?" na poochhe.
+        val option = args.optString("which_whatsapp").ifBlank { Settings(context).whatsAppChoice }
         val result = try {
             WhatsAppFlow(service).search(pkg!!, query, option)
         } catch (e: WhatsAppFlow.ChooserNeeded) {
@@ -124,7 +125,7 @@ class DeviceActions(private val context: Context) {
         val message = args.optString("message").trim()
         if (chat.isEmpty() || message.isEmpty()) return Outcome(false, error = "Chat ka naam ya message nahi mila")
         try {
-            WhatsAppFlow(service).send(pkg!!, chat, message, args.optString("which_whatsapp").ifBlank { null })
+            WhatsAppFlow(service).send(pkg!!, chat, message, args.optString("which_whatsapp").ifBlank { Settings(context).whatsAppChoice })
         } catch (e: WhatsAppFlow.ChooserNeeded) {
             return Outcome(false, error = "Phone mein do WhatsApp hain: ${e.options.joinToString()}. User se poocho kaunse se, phir which_whatsapp ke saath dobara.")
         }

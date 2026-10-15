@@ -20,6 +20,11 @@ class Settings(context: Context) {
         get() = prefs.getString("active_style", null) ?: STYLE_LIGHT
         set(value) = prefs.edit { putString("active_style", value) }
 
+    /** Dual/clone WhatsApp mein user hamesha kaunsa use karta hai ("normal" / "clone"). Khaali = har baar poochho. */
+    var whatsAppChoice: String
+        get() = prefs.getString("whatsapp_choice", null) ?: "normal"
+        set(value) = prefs.edit { putString("whatsapp_choice", value) }
+
     /** "Hello Max" wake word chalu hai ya nahi. */
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)

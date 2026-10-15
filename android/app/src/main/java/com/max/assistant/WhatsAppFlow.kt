@@ -1,7 +1,9 @@
 package com.max.assistant
 
 import android.content.Intent
+import android.content.pm.LauncherApps
 import android.os.Bundle
+import android.os.Process
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.delay
 
@@ -36,14 +38,22 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
      */
     suspend fun search(pkg: String, query: String, option: String? = null): SearchResult {
         openHome(pkg, option)
-        val searchButton = findById("menuitem_search", "my_search_bar", "search_bar")
-            ?: service.find(listOf("search"), exclude = listOf("meta ai"))
+        // Naye WhatsApp mein upar "Ask Meta AI or Search" bar hi search hai — usme sirf naam likhte hain
+        // (Enter nahi dabate), to chats/contacts dikhte hain, Meta AI se kuch nahi poochha jaata.
+        val searchButton = findById("menuitem_search", "my_search_bar", "search_bar", "search_entry", "search_bar_container")
+            ?: service.find(listOf("search"))
             ?: throw IllegalStateException("WhatsApp mein search button nahi mila")
+        DebugLog.i("🔍 Search button: id=${searchButton.viewIdResourceName?.substringAfterLast('/')}")
         service.click(searchButton)
-        delay(700)
-        val input = service.allNodes().firstOrNull { it.isEditable }
-            ?: throw IllegalStateException("WhatsApp search box nahi mila")
-        setText(input, query)
+        var input: AccessibilityNodeInfo? = null
+        repeat(15) { // search box khulne mein waqt lagta hai — 3 sec tak dekho
+            if (input != null) return@repeat
+            input = service.allNodes().firstOrNull { it.isEditable }
+            if (input == null) delay(200)
+        }
+        if (input == null) service.logIds("WhatsApp search (box nahi mila)")
+        val box = input ?: throw IllegalStateException("WhatsApp search box nahi mila")
+        setText(box, query)
         delay(1500) // results aane do
         service.logIds("WhatsApp search results")
 
@@ -51,7 +61,7 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
         if (names.isEmpty() && query.length > 2) {
             // WhatsApp sirf spelling milata hai — "China" se "Cheena" nahi milta. Pehle 2 akshar se dhundh ke
             // milte-julte naam chuno (Hindi/English spelling ka farak NameMatcher sambhalta hai).
-            setText(input, query.take(2))
+            setText(box, query.take(2))
             delay(1500)
             names = chatNames()
                 .filter { NameMatcher.similarity(query, it) >= 0.55 }
@@ -107,9 +117,11 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     /** WhatsApp ki main (chats) screen par le aao — kisi chat ke andar ho to Back. */
     private suspend fun openHome(pkg: String, option: String?) {
         if (service.foregroundPackage != pkg) {
-            val launch = service.packageManager.getLaunchIntentForPackage(pkg)
-                ?: throw IllegalStateException("WhatsApp nahi khula")
-            service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            if (!launchLikeHomeIcon(pkg, option)) {
+                val launch = service.packageManager.getLaunchIntentForPackage(pkg)
+                    ?: throw IllegalStateException("WhatsApp nahi khula")
+                service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
             var opened = false
             repeat(40) {
                 if (opened) return@repeat
@@ -133,6 +145,25 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
             delay(600)
         }
         service.logIds("WhatsApp home")
+    }
+
+    /**
+     * Normal (original) WhatsApp ko waise kholo jaise home screen ka icon kholta hai — tab dual/clone wali
+     * "kaunse se kholein?" list aati hi nahi. Clone chahiye ya ye na chale to false (phir normal tareeka).
+     */
+    private fun launchLikeHomeIcon(pkg: String, option: String?): Boolean {
+        val wantsClone = option?.lowercase()?.let { it.contains("clone") || it.contains("dusr") || it.contains("doosr") || it == "2" } == true
+        if (wantsClone) return false
+        return runCatching {
+            val launcher = service.getSystemService(LauncherApps::class.java)
+            val me = Process.myUserHandle()
+            val activity = launcher.getActivityList(pkg, me).firstOrNull() ?: return false
+            launcher.startMainActivity(activity.componentName, me, null, null)
+            true
+        }.getOrElse {
+            DebugLog.e("WhatsApp seedha nahi khula", it)
+            false
+        }
     }
 
     private fun isChooser(pkg: String): Boolean =
