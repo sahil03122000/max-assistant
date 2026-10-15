@@ -51,15 +51,25 @@ class VoiceRecorder {
                 ensureActive()
                 val n = record.read(frame, 0, FRAME)
                 reads++
-                if (n > 0) rmsDb(frame, n).takeIf { it > -90 }?.let { calibration += it }
+                if (n <= 0) continue
+                // Ye aawaz bhi rakho — user beep se pehle hi bolna shuru kar de to wo shabd na khoyein.
+                preRoll.addLast(frame.copyOf(n))
+                rmsDb(frame, n).takeIf { it > -90 }?.let { calibration += it }
             }
-            val floor = if (calibration.isEmpty()) DEFAULT_FLOOR_DB else calibration.sorted()[calibration.size / 2]
+            val measured = if (calibration.isEmpty()) DEFAULT_FLOOR_DB else calibration.sorted()[calibration.size / 2]
+            // Naapte waqt hi aawaz tez thi = user pehle se bol raha hai (shor nahi) — use shor mat maano.
+            val alreadySpeaking = measured > SPEAKING_DB
+            val floor = if (alreadySpeaking) DEFAULT_FLOOR_DB else measured
             val startDb = maxOf(floor + 10, -52.0)
             withContext(Dispatchers.Main) { onReady() }
             var peak = startDb
 
             // 2) Bolna shuru hone ka intezaar, 3) chup hone tak record.
-            var started = false
+            var started = alreadySpeaking
+            if (alreadySpeaking) {
+                DebugLog.i("🎙️ User beep se pehle hi bol raha tha — wahi se record")
+                preRoll.forEach { speech.write(toBytes(it)) }
+            }
             var loud = 0
             var quiet = 0
             var frames = 0
@@ -137,5 +147,7 @@ class VoiceRecorder {
         const val END_SILENCE_FRAMES = 40 // 0.8 sec chup
         const val MAX_SECONDS = 12
         const val DEFAULT_FLOOR_DB = -60.0
+        // Shor naapte waqt aawaz isse tez = koi bol raha hai (kamre ka shor itna tez nahi hota).
+        const val SPEAKING_DB = -40.0
     }
 }
