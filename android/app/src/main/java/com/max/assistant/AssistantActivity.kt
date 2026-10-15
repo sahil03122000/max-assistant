@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.max.assistant.ui.theme.MaxTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -79,10 +82,28 @@ class AssistantActivity : ComponentActivity() {
             // Sirf kinaron par roshni — touch peeche wali app ko jaaye (Max beech mein na aaye).
             window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
         }
+        // Phone control ON ho to roshni Accessibility overlay par — Max ke WhatsApp/Camera kholne par bhi upar dikhe
+        // (warna wo is screen ke saath un apps ke peeche chhup jaati thi).
+        val overlayGlow = lightOnly && MaxAccessibilityService.isEnabled
+        if (overlayGlow) {
+            lifecycleScope.launch {
+                var wasActive = false
+                snapshotFlow { controller.state to controller.micLevel }.collectLatest { (state, level) ->
+                    if (state != MaxState.Idle) {
+                        wasActive = true
+                        MaxAccessibilityService.instance?.showGlow(state, level)
+                    } else if (wasActive) {
+                        delay(2000)
+                        MaxAccessibilityService.instance?.hideGlow()
+                        finish()
+                    }
+                }
+            }
+        }
         setContent {
             MaxTheme {
                 if (lightOnly) {
-                    LightOnlyMode(controller, onDismiss = { finish() })
+                    LightOnlyMode(controller, drawGlow = !overlayGlow, onDismiss = { finish() })
                 } else {
                     AssistantSheet(controller, onDismiss = { finish() })
                 }
@@ -105,6 +126,7 @@ class AssistantActivity : ComponentActivity() {
 
     override fun onDestroy() {
         isOpen = false
+        MaxAccessibilityService.instance?.hideGlow()
         controller.destroy()
         super.onDestroy()
     }
@@ -143,7 +165,7 @@ private fun vibrate(context: Context) {
 
 /** Sirf screen ke kinaron par RGB roshni — koi panel/text nahi. Baat khatam hone ke 2 sec baad band. */
 @Composable
-private fun LightOnlyMode(controller: MaxController, onDismiss: () -> Unit) {
+private fun LightOnlyMode(controller: MaxController, drawGlow: Boolean, onDismiss: () -> Unit) {
     val state = controller.state
     var wasActive by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
@@ -160,7 +182,7 @@ private fun LightOnlyMode(controller: MaxController, onDismiss: () -> Unit) {
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
-    EdgeGlow(state, controller.micLevel)
+    if (drawGlow) EdgeGlow(state, controller.micLevel)
 }
 
 @Composable

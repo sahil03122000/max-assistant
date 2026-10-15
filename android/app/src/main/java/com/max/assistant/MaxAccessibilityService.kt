@@ -59,6 +59,7 @@ class MaxAccessibilityService : AccessibilityService() {
         instance = null
         scope.cancel()
         hideHint()
+        hideGlow()
         super.onDestroy()
     }
 
@@ -193,6 +194,40 @@ class MaxAccessibilityService : AccessibilityService() {
             }
         }, null)
         if (!ok && cont.isActive) cont.resume(false)
+    }
+
+    // ---------- RGB roshni (har app ke upar) ----------
+
+    private var glowView: EdgeGlowView? = null
+
+    /** "Max active hai" roshni dikhao/update karo — WhatsApp, Camera jaisi kisi bhi app ke upar. */
+    fun showGlow(state: MaxState, level: Float) {
+        val view = glowView ?: EdgeGlowView(this).also { v ->
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                // Status bar / notch ke peeche bhi — poori screen ka kinara.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    setFitInsetsTypes(0)
+                }
+            }
+            runCatching { getSystemService(WindowManager::class.java).addView(v, params) }
+                .onFailure { DebugLog.e("Roshni nahi lag paayi", it) }
+            glowView = v
+        }
+        view.level = level
+        view.state = state
+    }
+
+    fun hideGlow() {
+        glowView?.let { runCatching { getSystemService(WindowManager::class.java).removeView(it) } }
+        glowView = null
     }
 
     // ---------- Screen par chhota sandesh (selfie coach ke hints) ----------
