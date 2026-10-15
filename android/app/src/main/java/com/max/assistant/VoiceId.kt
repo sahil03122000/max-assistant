@@ -84,8 +84,13 @@ object VoiceId {
      */
     fun calibrate(context: Context, samples: List<FloatArray>) {
         val loo = samples.indices.map { i -> samples.filterIndexed { j, _ -> j != i }.maxOf { dot(it, samples[i]) } }
-        val t = (loo.min() * 0.6f).coerceIn(0.30f, 0.50f)
-        DebugLog.i("🔐 Voice ID save: aapas mein milaan ${loo.joinToString { "%.2f".format(it) }} → seema ${"%.2f".format(t)}")
+        // Ek-aadh kharab recording (khansi, shor — milaan 0.20) ko hata do, wo seema ko bhi neeche kheench deti thi.
+        val good = samples.filterIndexed { i, _ -> loo[i] >= 0.5f }.takeIf { it.size >= 3 } ?: samples
+        if (good.size < samples.size) save(context, good)
+        val median = loo.sorted()[loo.size / 2]
+        // Doosre insaan ka milaan aam taur par 0.3 se neeche — aapka ~0.9. Beech mein, par shor ki gunjaish ke saath.
+        val t = (median * 0.5f).coerceIn(0.30f, 0.45f)
+        DebugLog.i("🔐 Voice ID save: aapas mein milaan ${loo.joinToString { "%.2f".format(it) }} → ${good.size} rakhe, seema ${"%.2f".format(t)}")
         prefs(context).edit { putFloat("threshold", t) }
         threshold = t
     }
