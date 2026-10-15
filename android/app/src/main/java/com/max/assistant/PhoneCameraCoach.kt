@@ -33,6 +33,7 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
         val voice = MaxVoice(service, scope)
         voice.prefetch(CoachHint.entries.map { it.say } + LINES)
         WakeWordService.pause("coach")
+        service.holdScreenOn("coach", true)
         try {
             if (!waitForCamera()) {
                 voice.say("Camera app nahi khula")
@@ -56,6 +57,7 @@ class PhoneCameraCoach(private val service: MaxAccessibilityService, private val
             detector.close()
             voice.release()
             WakeWordService.resume("coach")
+            service.holdScreenOn("coach", false)
         }
     }
 

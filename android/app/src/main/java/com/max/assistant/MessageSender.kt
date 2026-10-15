@@ -26,12 +26,14 @@ class MessageSender(
     suspend fun run() {
         val voice = MaxVoice(service, scope)
         WakeWordService.pause("message")
+        service.holdScreenOn("message", true)
         try {
             val sent = trySend()
             voice.say(if (sent) "Bhej diya!" else "${app.label} mein Send nahi kar paaya, aap ek baar dekh ke khud bhej do")
         } finally {
             voice.release()
             WakeWordService.resume("message")
+            service.holdScreenOn("message", false)
         }
     }
 

@@ -56,7 +56,23 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     /**
      * [option]: dual WhatsApp ho to kaunsa — "1"/"2" ya naam ("clone", "WhatsApp"). Null aur list aaye to [ChooserNeeded].
      */
-    suspend fun search(pkg: String, query: String, option: String? = null): SearchResult {
+    suspend fun search(pkg: String, query: String, option: String? = null): SearchResult =
+        keepingScreenOn { searchInner(pkg, query, option) }
+
+    suspend fun send(pkg: String, chat: String, message: String, option: String? = null) =
+        keepingScreenOn { sendInner(pkg, chat, message, option) }
+
+    /** Kaam ke dauraan screen ON — beech mein lock ho jaata to Max ke tap kaam nahi karte (Send fail). */
+    private suspend fun <T> keepingScreenOn(block: suspend () -> T): T {
+        service.holdScreenOn("whatsapp", true)
+        try {
+            return block()
+        } finally {
+            service.holdScreenOn("whatsapp", false)
+        }
+    }
+
+    private suspend fun searchInner(pkg: String, query: String, option: String?): SearchResult {
         openHome(pkg, option)
         // Naye WhatsApp mein upar "Ask Meta AI or Search" bar hi search hai — usme sirf naam likhte hain
         // (Enter nahi dabate), to chats/contacts dikhte hain, Meta AI se kuch nahi poochha jaata.
@@ -101,10 +117,10 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
             .take(6)
 
     /** [chat] wali chat kholo (search results se; na mile to dobara search), [message] likho, Send. */
-    suspend fun send(pkg: String, chat: String, message: String, option: String? = null) {
+    private suspend fun sendInner(pkg: String, chat: String, message: String, option: String?) {
         var row = findChatRow(chat)
         if (row == null) {
-            search(pkg, chat, option)
+            searchInner(pkg, chat, option)
             row = findChatRow(chat) ?: throw IllegalStateException("'$chat' naam ki chat WhatsApp mein nahi mili")
         }
         service.click(row)
@@ -231,8 +247,12 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
                 ?.takeIf { NameMatcher.similarity(chat, it.text?.toString().orEmpty()) >= 0.6 }
     }
 
-    private fun findById(vararg ids: String): AccessibilityNodeInfo? =
-        service.allNodes().firstOrNull { node -> ids.any { node.viewIdResourceName.orEmpty().endsWith(":id/$it") } }
+    /** [ids] priority order mein — pehli id ka node pehle (screen par jo pehle aaye wo nahi). */
+    private fun findById(vararg ids: String): AccessibilityNodeInfo? {
+        val nodes = service.allNodes()
+        for (id in ids) nodes.firstOrNull { it.viewIdResourceName.orEmpty().endsWith(":id/$id") }?.let { return it }
+        return null
+    }
 
     private fun setText(node: AccessibilityNodeInfo, text: String) {
         node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)

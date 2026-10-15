@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.TypedValue
 import android.view.Display
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -208,7 +209,9 @@ class MaxAccessibilityService : AccessibilityService() {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    // Max kaam kar raha hai tab screen band na ho (WhatsApp ke beech lock ho ke Send fail hota tha).
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 // Status bar / notch ke peeche bhi — poori screen ka kinara.
@@ -223,6 +226,32 @@ class MaxAccessibilityService : AccessibilityService() {
         }
         view.level = level
         view.state = state
+    }
+
+    private val screenHolds = mutableSetOf<String>()
+    private var screenOnView: View? = null
+
+    /**
+     * Max ka koi kaam (WhatsApp, selfie...) chal raha hai — tab tak screen ON rakho, chahe Max ki apni screen
+     * peeche ho. Ek chhoti (dikhti nahi) overlay window "screen on rakho" flag ke saath.
+     */
+    fun holdScreenOn(owner: String, on: Boolean) {
+        if (on) screenHolds += owner else screenHolds -= owner
+        val wm = getSystemService(WindowManager::class.java)
+        if (screenHolds.isNotEmpty() && screenOnView == null) {
+            val v = View(this)
+            val params = WindowManager.LayoutParams(
+                1, 1,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                PixelFormat.TRANSLUCENT,
+            )
+            runCatching { wm.addView(v, params) }.onSuccess { screenOnView = v }
+        } else if (screenHolds.isEmpty()) {
+            screenOnView?.let { runCatching { wm.removeView(it) } }
+            screenOnView = null
+        }
     }
 
     fun hideGlow() {
