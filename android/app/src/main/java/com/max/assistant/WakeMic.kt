@@ -26,6 +26,8 @@ class WakeMic(
     private val grammar: String,
     /** Voice ID: "Hello Max" wali aawaz kitni user jaisi (0..1). null = check band. Mic thread par chalta hai. */
     private val verify: ((ShortArray) -> Float?)? = null,
+    /** Video/gaana chal raha hai? Tab chup kabhi nahi aati — "max" sunte hi faisla karo, chup ka intezaar nahi. */
+    private val mediaPlaying: () -> Boolean = { false },
     private val onFinal: (json: String, commandWav: ByteArray?, voiceScore: Float?) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
@@ -66,13 +68,34 @@ class WakeMic(
         try {
             record.startRecording()
             val buffer = ShortArray(CHUNK)
+            var chunks = 0
+            var maxHeardAt = -1
             while (running) {
                 val n = record.read(buffer, 0, CHUNK)
                 if (n <= 0) continue
                 for (i in 0 until n) ring[((fed + i) % RING).toInt()] = buffer[i]
                 fed += n
-                if (recognizer.acceptWaveForm(buffer, n)) {
-                    val json = recognizer.result
+                chunks++
+                var final = recognizer.acceptWaveForm(buffer, n)
+                var json = if (final) recognizer.result else null
+                if (!final && chunks % 3 == 0) {
+                    // Vosk tabhi poora result deta hai jab bolne ke baad chup ho. Video chalte waqt chup aati hi nahi —
+                    // "Hello Max" sun kar bhi Max nahi jaagta tha (video pause karte hi jaagta). Adhoore result mein
+                    // "max" aaye to: video chal raha ho to turant, warna 2 sec baad bhi chup na aaye to — faisla abhi.
+                    val partial = runCatching { JSONObject(recognizer.partialResult).optString("partial") }.getOrDefault("")
+                    if (MAX_WORD.containsMatchIn(partial)) {
+                        if (maxHeardAt < 0) maxHeardAt = chunks
+                        val waited = chunks - maxHeardAt
+                        if ((mediaPlaying() && waited >= 3) || waited >= 20) {
+                            json = recognizer.finalResult
+                            final = true
+                        }
+                    } else {
+                        maxHeardAt = -1
+                    }
+                }
+                if (final && json != null) {
+                    maxHeardAt = -1
                     val command = commandAfterMax(json, ring, fed)
                     val score = verify?.let { v -> wakePhrase(json, ring, fed)?.let { pcm -> runCatching { v(pcm) }.getOrNull() } }
                     main.post { onFinal(json, command, score) }
@@ -153,6 +176,7 @@ class WakeMic(
         const val RING = SAMPLE_RATE * 8 // 8 sec yaad
         const val MIN_COMMAND_SAMPLES = (SAMPLE_RATE * 1.2).toLong()
         const val MIN_VOICED_FRAMES = 4 // x 0.1 sec
+        val MAX_WORD = Regex("""\bmax\b""")
         const val COMMAND_MIN_PEAK_DB = -40.0
     }
 }

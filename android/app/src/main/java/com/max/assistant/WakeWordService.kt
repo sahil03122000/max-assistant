@@ -213,7 +213,10 @@ class WakeWordService : Service() {
         VoiceId.loadThreshold(this)
         val verify: ((ShortArray) -> Float?)? =
             if (VoiceId.isActive(this)) { pcm -> VoiceId.score(this, pcm) } else null
-        mic = WakeMic(m, GRAMMAR, verify) { json, command, score -> check(json, command, score) }.also { it.start() }
+        val audio = getSystemService(AudioManager::class.java)
+        mic = WakeMic(m, GRAMMAR, verify, mediaPlaying = { audio.isMusicActive }) { json, command, score ->
+            check(json, command, score)
+        }.also { it.start() }
     }
 
     private fun stopListening() {

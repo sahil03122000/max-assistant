@@ -19,6 +19,12 @@ object MediaPause {
     private var request: AudioFocusRequest? = null
     private val main = Handler(Looper.getMainLooper())
 
+    /**
+     * Max ka kaam khatam hone par (video wapas chalu hone ke baad) dabaane wala button — jaise "pause karo" ya
+     * "next episode". Pehle dabate to focus chhodte hi video apne aap phir chal padti.
+     */
+    @Volatile var keyAfterRelease: Int? = null
+
     fun hold(context: Context, owner: String, autoReleaseMs: Long = 0) {
         synchronized(owners) {
             owners += owner
@@ -42,6 +48,15 @@ object MediaPause {
         if (autoReleaseMs > 0) main.postDelayed({ release(context, owner) }, autoReleaseMs)
     }
 
+    fun isHolding(): Boolean = synchronized(owners) { request != null }
+
+    fun pressMediaKey(context: Context, key: Int) {
+        val audio = context.applicationContext.getSystemService(AudioManager::class.java)
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
+        DebugLog.i("⏯️ Media button: ${android.view.KeyEvent.keyCodeToString(key)}")
+    }
+
     fun release(context: Context, owner: String) {
         synchronized(owners) {
             if (!owners.remove(owner) || owners.isNotEmpty()) return
@@ -50,6 +65,10 @@ object MediaPause {
                 DebugLog.i("▶️ Media wapas chalu")
             }
             request = null
+            keyAfterRelease?.let { key ->
+                keyAfterRelease = null
+                main.postDelayed({ pressMediaKey(context, key) }, 700)
+            }
         }
     }
 }

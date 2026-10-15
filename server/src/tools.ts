@@ -173,6 +173,23 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     parameters: { type: Type.OBJECT, properties: {} },
   },
   {
+    name: "media_control",
+    description:
+      "Phone par chal rahe video/gaane (YouTube, Instagram, Spotify...) ko control karo: pause, play, next, previous, ya media volume.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        action: {
+          type: Type.STRING,
+          enum: ["pause", "play", "next", "previous", "volume_up", "volume_down", "volume_set"],
+          description: "Kya karna hai",
+        },
+        level: { type: Type.NUMBER, description: "Sirf volume_set ke liye: 0-100 (percent)" },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "play_on_youtube",
     description:
       "YouTube par gaana ya video chalao. Agar search_youtube se user ne koi video chuna hai to uska video_id do; specific gaane ka naam ho to sirf query kaafi hai.",

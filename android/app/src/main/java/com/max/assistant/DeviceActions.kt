@@ -56,6 +56,7 @@ class DeviceActions(
             "set_reminder" -> setReminder(args)
             "open_app" -> openApp(args)
             "play_on_youtube" -> playOnYouTube(args)
+            "media_control" -> mediaControl(args)
             "open_camera" -> openCamera(args)
             "unlock_phone" -> unlockPhone()
             else -> Outcome(false, error = "Ye kaam (${action.name}) abhi is phone app mein supported nahi hai")
@@ -324,6 +325,34 @@ class DeviceActions(
         val intent = pm.getLaunchIntentForPackage(match.second)
             ?: return Outcome(false, error = "${match.first} khul nahi sakta")
         return Outcome(true, result = "${match.first} khulega", launch = intent)
+    }
+
+    /** Chalti video/gaana: pause/next (Max ka kaam khatam hote hi) aur media volume (turant). */
+    private fun mediaControl(args: JSONObject): Outcome {
+        val audio = context.getSystemService(android.media.AudioManager::class.java)
+        val stream = android.media.AudioManager.STREAM_MUSIC
+        val max = audio.getStreamMaxVolume(stream)
+        fun percent() = audio.getStreamVolume(stream) * 100 / max
+        fun setPercent(p: Int) = audio.setStreamVolume(stream, (p.coerceIn(0, 100) * max + 50) / 100, 0)
+        val key = when (val action = args.optString("action")) {
+            "volume_up", "volume_down", "volume_set" -> {
+                val before = percent()
+                when (action) {
+                    "volume_up" -> setPercent(before + 15)
+                    "volume_down" -> setPercent(before - 15)
+                    else -> setPercent(args.optInt("level", before))
+                }
+                return Outcome(true, result = "Media volume ab ${percent()}% hai (pehle $before% tha)")
+            }
+            "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+            "play" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+            "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+            "previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            else -> return Outcome(false, error = "Ye media kaam samajh nahi aaya: $action")
+        }
+        // Max abhi video roke hue hai — button tab dabao jab Max chup ho jaaye (warna focus chhodte hi video chal padti).
+        if (MediaPause.isHolding()) MediaPause.keyAfterRelease = key else MediaPause.pressMediaKey(context, key)
+        return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
     }
 
     private fun playOnYouTube(args: JSONObject): Outcome {
