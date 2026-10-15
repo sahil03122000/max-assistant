@@ -103,8 +103,9 @@ class DeviceActions(private val context: Context) {
             0 -> Outcome(false, error = "WhatsApp mein '$query' naam ki koi chat nahi mili. User se sahi naam poocho.")
             1 -> Outcome(
                 true,
-                result = "Ek chat mili, uska exact naam: \"${result.names[0]}\". Ise user ko batao (agar user ke bole naam se alag hai to " +
-                    "confirm karo ki yahi hai), phir whatsapp_send mein chat=\"${result.names[0]}\" do.",
+                result = "Ek chat mili, exact naam: \"${result.names[0]}\". Agar user message ke liye pehle hi haan bol chuka hai " +
+                    "aur naam wahi hai jo usne bola, to ABHI whatsapp_send(chat=\"${result.names[0]}\") call karo. Naam kaafi alag " +
+                    "ho to pehle user se confirm karo.",
             )
             else -> Outcome(
                 true,
@@ -129,7 +130,11 @@ class DeviceActions(private val context: Context) {
         } catch (e: WhatsAppFlow.ChooserNeeded) {
             return Outcome(false, error = "Phone mein do WhatsApp hain: ${e.options.joinToString()}. User se poocho kaunse se, phir which_whatsapp ke saath dobara.")
         }
-        return Outcome(true, result = "Message sach mein bhej diya gaya ($chat)")
+        return Outcome(
+            true,
+            result = "Message sach mein bhej diya gaya ($chat). Chat abhi khuli hai — user ko 'Bhej diya. $chat ko aur kuch bhejun?' bolo; " +
+                "agla jawab message jaisa ho to wahi $chat ko whatsapp_send karo (search nahi).",
+        )
     }
 
     // ---------- Contacts / call / messages ----------

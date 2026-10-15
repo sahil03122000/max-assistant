@@ -22,6 +22,10 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
         const val NORMAL = "com.whatsapp"
         const val BUSINESS = "com.whatsapp.w4b"
 
+        /** Max ne aakhri baar kaunsi chat kholi (usi ko agla message ho to search nahi). */
+        @Volatile
+        private var lastOpenedChat: String? = null
+
         /** Dual/clone WhatsApp ke label mein ye shabd hote hain ("WhatsApp (Clone)", "Dual WhatsApp"). */
         private val CLONE_WORDS = listOf("clone", "dual", "parallel", "twin", "second")
 
@@ -118,12 +122,18 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
 
     /** [chat] wali chat kholo (search results se; na mile to dobara search), [message] likho, Send. */
     private suspend fun sendInner(pkg: String, chat: String, message: String, option: String?) {
-        var row = findChatRow(chat)
-        if (row == null) {
-            searchInner(pkg, chat, option)
-            row = findChatRow(chat) ?: throw IllegalStateException("'$chat' naam ki chat WhatsApp mein nahi mili")
+        // Usi insaan ko doosra message ("haan, 20 min baad aaunga") — chat pehle se khuli hai to dobara search mat karo.
+        if (isChatOpen(pkg, chat)) {
+            DebugLog.i("💬 Chat pehle se khuli — seedha likh raha hoon")
+        } else {
+            var row = findChatRow(chat)
+            if (row == null) {
+                searchInner(pkg, chat, option)
+                row = findChatRow(chat) ?: throw IllegalStateException("'$chat' naam ki chat WhatsApp mein nahi mili")
+            }
+            service.click(row)
         }
-        service.click(row)
+        lastOpenedChat = chat
         // Chat khulne ka intezaar (message box dikhe).
         var entry: AccessibilityNodeInfo? = null
         repeat(20) {
@@ -150,6 +160,14 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     }
 
     // ---------- Helpers ----------
+
+    /** Abhi WhatsApp mein yahi chat khuli hai? (upar naam dikhe, ya Max ne hi pichhli baar yahi kholi thi.) */
+    private fun isChatOpen(pkg: String, chat: String): Boolean {
+        if (service.foregroundPackage != pkg || findById("entry") == null) return false
+        val title = findById("conversation_contact_name", "conversation_contact_name_text", "toolbar_title")?.text?.toString()
+        if (title != null) return title.equals(chat, ignoreCase = true) || NameMatcher.similarity(chat, title) >= 0.7
+        return lastOpenedChat.equals(chat, ignoreCase = true)
+    }
 
     /** WhatsApp ki main (chats) screen par le aao — kisi chat ke andar ho to Back. */
     private suspend fun openHome(pkg: String, option: String?) {
