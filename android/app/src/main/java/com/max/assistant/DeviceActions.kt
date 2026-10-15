@@ -88,7 +88,16 @@ class DeviceActions(private val context: Context) {
         val (pkg, problem) = whatsAppPackage(args)
         problem?.let { return it }
         val query = args.optString("name").trim().ifEmpty { return Outcome(false, error = "Kisko dhundhna hai, naam nahi mila") }
-        val result = WhatsAppFlow(service).search(pkg!!, query)
+        val option = args.optString("which_whatsapp").ifBlank { null }
+        val result = try {
+            WhatsAppFlow(service).search(pkg!!, query, option)
+        } catch (e: WhatsAppFlow.ChooserNeeded) {
+            return Outcome(
+                false,
+                error = "Phone mein do WhatsApp hain: " + e.options.mapIndexed { i, o -> "${i + 1}. $o" }.joinToString(", ") +
+                    ". User se poocho kaunse se (pehla/doosra ya naam), phir whatsapp_search which_whatsapp ke saath dobara.",
+            )
+        }
         return when (result.names.size) {
             0 -> Outcome(false, error = "WhatsApp mein '$query' naam ki koi chat nahi mili. User se sahi naam poocho.")
             1 -> Outcome(true, result = "Ek chat mili: ${result.names[0]}. Ab message confirm karke whatsapp_send karo.")
@@ -110,7 +119,11 @@ class DeviceActions(private val context: Context) {
         val chat = args.optString("chat").trim()
         val message = args.optString("message").trim()
         if (chat.isEmpty() || message.isEmpty()) return Outcome(false, error = "Chat ka naam ya message nahi mila")
-        WhatsAppFlow(service).send(pkg!!, chat, message)
+        try {
+            WhatsAppFlow(service).send(pkg!!, chat, message, args.optString("which_whatsapp").ifBlank { null })
+        } catch (e: WhatsAppFlow.ChooserNeeded) {
+            return Outcome(false, error = "Phone mein do WhatsApp hain: ${e.options.joinToString()}. User se poocho kaunse se, phir which_whatsapp ke saath dobara.")
+        }
         return Outcome(true, result = "Message sach mein bhej diya gaya ($chat)")
     }
 

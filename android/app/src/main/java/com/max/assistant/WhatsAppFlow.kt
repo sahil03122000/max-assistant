@@ -28,8 +28,14 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     /** Chat ke naam jo is screen par dikh rahe hain. */
     data class SearchResult(val names: List<String>)
 
-    suspend fun search(pkg: String, query: String): SearchResult {
-        openHome(pkg)
+    /** Phone ne "kaunse WhatsApp se kholein?" list dikhayi (dual/clone WhatsApp) — user se poochna hai. */
+    class ChooserNeeded(val options: List<String>) : Exception("Do WhatsApp hain")
+
+    /**
+     * [option]: dual WhatsApp ho to kaunsa — "1"/"2" ya naam ("clone", "WhatsApp"). Null aur list aaye to [ChooserNeeded].
+     */
+    suspend fun search(pkg: String, query: String, option: String? = null): SearchResult {
+        openHome(pkg, option)
         val searchButton = findById("menuitem_search", "my_search_bar", "search_bar")
             ?: service.find(listOf("search"), exclude = listOf("meta ai"))
             ?: throw IllegalStateException("WhatsApp mein search button nahi mila")
@@ -49,10 +55,10 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     }
 
     /** [chat] wali chat kholo (search results se; na mile to dobara search), [message] likho, Send. */
-    suspend fun send(pkg: String, chat: String, message: String) {
+    suspend fun send(pkg: String, chat: String, message: String, option: String? = null) {
         var row = findChatRow(chat)
         if (row == null) {
-            search(pkg, chat)
+            search(pkg, chat, option)
             row = findChatRow(chat) ?: throw IllegalStateException("'$chat' naam ki chat WhatsApp mein nahi mili")
         }
         service.click(row)
@@ -84,15 +90,23 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
     // ---------- Helpers ----------
 
     /** WhatsApp ki main (chats) screen par le aao — kisi chat ke andar ho to Back. */
-    private suspend fun openHome(pkg: String) {
+    private suspend fun openHome(pkg: String, option: String?) {
         if (service.foregroundPackage != pkg) {
             val launch = service.packageManager.getLaunchIntentForPackage(pkg)
                 ?: throw IllegalStateException("WhatsApp nahi khula")
             service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            repeat(30) {
-                if (service.foregroundPackage == pkg) return@repeat
-                delay(200)
+            var opened = false
+            repeat(40) {
+                if (opened) return@repeat
+                val fg = service.foregroundPackage.orEmpty()
+                when {
+                    fg == pkg -> opened = true
+                    // Dual / clone WhatsApp: phone "kaunse se kholein?" poochhta hai.
+                    isChooser(fg) -> chooseWhatsApp(option)
+                    else -> delay(200)
+                }
             }
+            if (!opened) throw IllegalStateException("WhatsApp nahi khula")
             delay(1200)
         }
         // Chat ya search ke andar ho to bahar aao (max 4 baar Back).
@@ -104,6 +118,42 @@ class WhatsAppFlow(private val service: MaxAccessibilityService) {
             delay(600)
         }
         service.logIds("WhatsApp home")
+    }
+
+    private fun isChooser(pkg: String): Boolean =
+        pkg.contains("intentresolver") || pkg == "android" || pkg.contains("resolver") || pkg.contains("chooser")
+
+    /** Chooser mein dikh rahe WhatsApp options (app ke naam — private nahi). */
+    private fun chooserOptions(): List<android.view.accessibility.AccessibilityNodeInfo> =
+        service.allNodes().filter { node ->
+            val text = node.text?.toString().orEmpty()
+            text.contains("whatsapp", ignoreCase = true) && text.length < 40
+        }
+
+    private suspend fun chooseWhatsApp(option: String?) {
+        delay(500) // list poori dikhne do
+        val nodes = chooserOptions()
+        val labels = nodes.map { it.text.toString() }
+        DebugLog.i("📲 WhatsApp chooser: ${labels.joinToString(" | ")}")
+        if (nodes.size < 2) return // sirf ek — shayad apne aap khul jaayega
+        val wanted = option?.trim()?.lowercase()
+        if (wanted.isNullOrEmpty()) {
+            // List band karo aur Max user se poochhe.
+            service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+            throw ChooserNeeded(labels)
+        }
+        val index = when {
+            wanted.toIntOrNull() != null -> wanted.toInt() - 1
+            wanted.contains("pehl") || wanted.contains("first") || wanted.contains("original") -> 0
+            wanted.contains("dusr") || wanted.contains("doosr") || wanted.contains("second") -> 1
+            else -> labels.indexOfFirst { it.lowercase().contains(wanted) }.takeIf { it >= 0 }
+                ?: labels.indices.maxByOrNull { NameMatcher.similarity(wanted, labels[it]) } ?: 0
+        }.coerceIn(0, nodes.lastIndex)
+        DebugLog.i("📲 Chuna: ${labels[index]}")
+        service.click(nodes[index])
+        // "Hamesha / Sirf ek baar" puchhe to "Just once" — default mat badlo.
+        delay(600)
+        service.find(listOf("just once", "sirf ek baar", "once"))?.let { service.click(it) }
     }
 
     private fun chatNames(): List<String> =

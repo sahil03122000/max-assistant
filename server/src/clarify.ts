@@ -4,7 +4,7 @@
 const GREETINGS = ["hi", "hii", "hello", "helo", "hey", "good morning", "good night", "gm", "gn", "happy birthday", "thank you", "thanks", "bye"];
 
 const GREETING_MESSAGE = new RegExp(
-  String.raw`^(.+?)\s+(?:ko|ku)\s+(?:(whatsapp|whats app|sms|message|msg)\s+(?:pe|par|per|me|mein)\s+)?(${GREETINGS.join("|")})\s+(?:bhejo|bhej do|bhejna|bol do|bolo|kar do|send karo)\s*[.!]*$`,
+  String.raw`^(.+?)\s+(?:ko|ku)\s+(?:(whatsapp|whats app|sms|message|msg)\s+(?:pe|par|per|me|mein)\s+)?(${GREETINGS.join("|")})\s+(?:(?:message|msg|ka message)\s+)?(?:bhejo|bhej do|bhejna|bol do|bolo|kar do|send karo)\s*[.!]*$`,
   "i",
 );
 

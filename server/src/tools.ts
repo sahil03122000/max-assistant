@@ -38,6 +38,7 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
       properties: {
         name: { type: Type.STRING, description: "Jo naam user ne bola" },
         app: { type: Type.STRING, enum: ["normal", "business"], description: "Kaunsa WhatsApp — sirf jab user ne bataya / poochhne par" },
+        which_whatsapp: { type: Type.STRING, description: "Dual/clone WhatsApp ho (tool ne bataya ho) to user ka chuna option: '1', '2' ya naam (jaise 'clone')" },
       },
       required: ["name"],
     },
@@ -53,6 +54,7 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
         chat: { type: Type.STRING, description: "whatsapp_search ki list mein se chat ka poora naam" },
         message: { type: Type.STRING, description: "Bhejne wala message" },
         app: { type: Type.STRING, enum: ["normal", "business"], description: "Kaunsa WhatsApp (search wala hi)" },
+        which_whatsapp: { type: Type.STRING, description: "Search mein jo chuna tha wahi (dual/clone WhatsApp)" },
       },
       required: ["chat", "message"],
     },
