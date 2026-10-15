@@ -45,6 +45,7 @@ class WakeWordService : Service() {
         const val WAKE_MEDIA_HOLD = "wake"
         private const val PHRASE_MIN_CONF = 0.70
         private const val QUICK_MIN_CONF = 0.90
+        private const val MEDIA_GREET_MIN_CONF = 0.50
         private val SESSION_PHRASE = Regex("""\bmax\b""")
         private val WAKE_PHRASE = Regex("""\b(hello|hey|hi) max\b""")
 
@@ -241,7 +242,9 @@ class WakeWordService : Service() {
             val w = words!!.getJSONObject(i)
             w.optString("word") to w.optDouble("conf", 0.0)
         }
-        DebugLog.i("👂 suna: '$text' ${conf.entries.joinToString { "${it.key}=${"%.2f".format(it.value)}" }}")
+        // Phone par video/reel/gaana chal raha hai — mic mein uski aawaz bhi, isliye "Hello Max" kam pakka sunta hai.
+        val media = getSystemService(AudioManager::class.java).isMusicActive
+        DebugLog.i("👂 suna: '$text' ${conf.entries.joinToString { "${it.key}=${"%.2f".format(it.value)}" }}${if (media) " (media chal raha)" else ""}")
 
         // Call chal rahi hai (phone ya WhatsApp) — baat-cheet mein "max" jaisi aawaz par mat jaago.
         if (inCall()) return
@@ -250,8 +253,11 @@ class WakeWordService : Service() {
         if (sessionActive && now - sessionTouchedAt > SESSION_IDLE_MS) endSession()
         val maxConf = conf["max"] ?: 0.0
         // "Hello Max": dono shabd theek-thaak pakke. Conversation mode mein akela "Max" — bahut pakka hona chahiye.
+        // Video chalte waqt "hello" ka hissa dab jaata hai (hello=0.61, max=0.74 par bhi nahi jaagta tha) — tab
+        // "hello" thoda kam pakka bhi chalega; "max" utna hi pakka chahiye (video ki baat par galti se na jaage).
+        val greetMin = if (media) MEDIA_GREET_MIN_CONF else PHRASE_MIN_CONF
         val fullPhrase = WAKE_PHRASE.containsMatchIn(text) && maxConf >= PHRASE_MIN_CONF &&
-            listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= PHRASE_MIN_CONF }
+            listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= greetMin }
         val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= QUICK_MIN_CONF
         if (!fullPhrase && !quick) return
         // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.
