@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -43,7 +44,10 @@ class WakeWordService : Service(), RecognitionListener {
         private const val ACTION_STOP = "com.max.assistant.STOP_WAKE_WORD"
         private const val SAMPLE_RATE = 16000f
         private const val RESUME_QUIET_MS = 2000L
-        private const val SESSION_IDLE_MS = 15 * 60 * 1000L
+        private const val SESSION_IDLE_MS = 3 * 60 * 1000L
+        // Kitna pakka suna ho tab jaago (0..1). Galti se jaage to badhao, sune nahi to ghatao.
+        private const val PHRASE_MIN_CONF = 0.70
+        private const val QUICK_MIN_CONF = 0.90
         private val SESSION_PHRASE = Regex("""\bmax\b""")
         private val WAKE_PHRASE = Regex("""\b(hello|hey|hi) max\b""")
 
@@ -197,7 +201,7 @@ class WakeWordService : Service(), RecognitionListener {
         val m = model ?: return
         if (speechService != null) return
         try {
-            val rec = Recognizer(m, SAMPLE_RATE, GRAMMAR)
+            val rec = Recognizer(m, SAMPLE_RATE, GRAMMAR).apply { setWords(true) } // har shabd ka confidence
             recognizer = rec
             speechService = SpeechService(rec, SAMPLE_RATE).also { it.startListening(this) }
         } catch (e: Exception) {
@@ -230,11 +234,13 @@ class WakeWordService : Service(), RecognitionListener {
 
     // ---------- Vosk callbacks (main thread par aate hain) ----------
 
-    override fun onPartialResult(hypothesis: String?) = check(hypothesis, "partial")
+    // Adhoori (partial) aawaz par faisla nahi — usme "pakka hai ya nahi" (confidence) nahi hota, aur galti se
+    // jaag jaata tha. Sirf poora shabd sunne ke baad (thoda sa der, lekin sahi).
+    override fun onPartialResult(hypothesis: String?) {}
 
-    override fun onResult(hypothesis: String?) = check(hypothesis, "text")
+    override fun onResult(hypothesis: String?) = check(hypothesis)
 
-    override fun onFinalResult(hypothesis: String?) = check(hypothesis, "text")
+    override fun onFinalResult(hypothesis: String?) = check(hypothesis)
 
     override fun onError(exception: Exception?) {
         DebugLog.e("Wake word error", exception)
@@ -242,15 +248,28 @@ class WakeWordService : Service(), RecognitionListener {
 
     override fun onTimeout() {}
 
-    private fun check(hypothesis: String?, key: String) {
-        val text = hypothesis?.let { runCatching { JSONObject(it).optString(key) }.getOrNull() } ?: return
-        // Debug: wake word ne poora vaakya kya suna (sirf final result, partial bahut zyada hote hain).
-        if (key == "text" && text.isNotBlank()) DebugLog.i("👂 suna: '$text'")
+    private fun check(hypothesis: String?) {
+        val json = hypothesis?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
+        val text = json.optString("text")
+        if (text.isBlank()) return
+        // Har shabd kitna pakka suna gaya (0..1) — Vosk "mask/mast/next" ko bhi "max" bana deta hai, par kam pakka.
+        val words = json.optJSONArray("result")
+        val conf = (0 until (words?.length() ?: 0)).associate { i ->
+            val w = words!!.getJSONObject(i)
+            w.optString("word") to w.optDouble("conf", 0.0)
+        }
+        DebugLog.i("👂 suna: '$text' ${conf.entries.joinToString { "${it.key}=${"%.2f".format(it.value)}" }}")
+
+        // Call chal rahi hai (phone ya WhatsApp) — baat-cheet mein "max" jaisi aawaz par mat jaago.
+        if (inCall()) return
+
         val now = SystemClock.elapsedRealtime()
         if (sessionActive && now - sessionTouchedAt > SESSION_IDLE_MS) endSession()
-        // Normally poora phrase chahiye (akele "max" par galti se jaagta tha). Conversation mode mein sirf "Max".
-        val fullPhrase = WAKE_PHRASE.containsMatchIn(text)
-        val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text)
+        val maxConf = conf["max"] ?: 0.0
+        // "Hello Max": dono shabd theek-thaak pakke. Conversation mode mein akela "Max" — bahut pakka hona chahiye.
+        val fullPhrase = WAKE_PHRASE.containsMatchIn(text) && maxConf >= PHRASE_MIN_CONF &&
+            listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= PHRASE_MIN_CONF }
+        val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= QUICK_MIN_CONF
         if (!fullPhrase && !quick) return
         // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.
         if (now < ignoreUntil) return
@@ -260,6 +279,13 @@ class WakeWordService : Service(), RecognitionListener {
         DebugLog.i("👂 Wake word: '$text'${if (quick) " (conversation mode)" else ""}")
         startSession()
         onWake(quick)
+    }
+
+    /** Phone call / WhatsApp call chal rahi hai ya ghanti baj rahi hai. */
+    private fun inCall(): Boolean {
+        val mode = getSystemService(AudioManager::class.java).mode
+        return mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION ||
+            mode == AudioManager.MODE_RINGTONE || mode == AudioManager.MODE_CALL_SCREENING
     }
 
     private fun onWake(quick: Boolean) {
