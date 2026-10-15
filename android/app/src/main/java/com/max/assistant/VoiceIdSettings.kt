@@ -1,7 +1,5 @@
 package com.max.assistant
 
-import android.media.AudioManager
-import android.media.ToneGenerator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -98,21 +96,20 @@ private fun VoiceEnrollDialog(onDone: (Boolean) -> Unit) {
         delay(800)
         val samples = mutableListOf<FloatArray>()
         val recorder = VoiceRecorder()
-        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
         var tries = 0
-        try {
         while (samples.size < VoiceId.SAMPLES_NEEDED && tries < VoiceId.SAMPLES_NEEDED * 2) {
             tries++
             step = samples.size + 1
-            status = "(${step}/${VoiceId.SAMPLES_NEEDED}) Beep ke baad bolo: \"Hello Max\""
-            val wav = recorder.record(startTimeoutMs = 6_000, onReady = { tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150) })
+            status = "(${step}/${VoiceId.SAMPLES_NEEDED}) Ab bolo: \"Hello Max\""
+            // Beep nahi — wo bhi record ho jaata tha aur aawaz ki pehchaan bigaad deta tha.
+            val wav = recorder.record(startTimeoutMs = 6_000)
             if (wav == null) {
                 status = "Kuch suna nahi — phir se"
                 delay(900)
                 continue
             }
             val emb = withContext(Dispatchers.Default) {
-                runCatching { VoiceId.embed(context, VoiceId.wavToPcm(wav)) }
+                runCatching { VoiceId.embed(context, VoiceId.trimToSpeech(VoiceId.wavToPcm(wav))) }
                     .onFailure { DebugLog.e("Voice ID embedding fail", it) }
                     .getOrNull()
             }
@@ -124,9 +121,6 @@ private fun VoiceEnrollDialog(onDone: (Boolean) -> Unit) {
             samples += emb
             status = "✓ Mil gaya"
             delay(500)
-        }
-        } finally {
-            tone.release()
         }
         if (samples.size >= VoiceId.SAMPLES_NEEDED) {
             VoiceId.save(context, samples)

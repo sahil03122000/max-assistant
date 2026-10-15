@@ -24,7 +24,7 @@ function peakDb(wav: Buffer): number {
 }
 
 // Whisper shor/chup par aksar ye "sunta" hai — inhe asli baat mat maano.
-const WHISPER_HALLUCINATIONS = /^(thank you|thanks for watching|you|bye|subtitles?.*|please subscribe.*|धन्यवाद|शुक्रिया)[.!\s]*$|welcome back to (my|our) channel|like and subscribe|thanks for watching/i;
+const WHISPER_HALLUCINATIONS = /^(thank you|thanks for watching|you|bye|subtitles?.*|please subscribe.*|धन्यवाद|शुक्रिया|kala|kaala|काला)[.!\s]*$|welcome back to (my|our) channel|like and subscribe|thanks for watching/i;
 
 export async function transcribe(wav: Buffer): Promise<string> {
   if (peakDb(wav) < -45) return "";

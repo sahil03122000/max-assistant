@@ -94,6 +94,27 @@ object VoiceId {
         prefs(context).getString("samples", null).orEmpty().split("|").filter { it.isNotBlank() }
             .map { s -> s.split(",").map(String::toFloat).toFloatArray() }
 
+    /**
+     * Sirf bolne wala hissa (aage-peeche ki chup/beep hatao) — wake word ke waqt bhi sirf "Hello Max" milaate hain,
+     * dono same jaise hon to milaan sahi aata hai. (Pehle save mein chup + beep bhi jaata tha → aapka milaan 0.25.)
+     */
+    fun trimToSpeech(pcm: ShortArray): ShortArray {
+        val frame = 480 // 30 ms
+        val db = (0 until pcm.size / frame).map { f ->
+            var sum = 0.0
+            for (i in f * frame until (f + 1) * frame) sum += pcm[i].toDouble() * pcm[i]
+            val rms = sqrt(sum / frame)
+            if (rms < 1) -100.0 else 20 * kotlin.math.log10(rms / 32768.0)
+        }
+        if (db.isEmpty()) return pcm
+        val loudFrom = db.max() - 25
+        val first = db.indexOfFirst { it >= loudFrom }
+        val last = db.indexOfLast { it >= loudFrom }
+        val from = maxOf(0, (first - 7) * frame) // ~0.2 sec aage-peeche, jaise wake word mein
+        val to = minOf(pcm.size, (last + 8) * frame)
+        return pcm.copyOfRange(from, to)
+    }
+
     /** Saved WAV (VoiceRecorder) → PCM (44 byte header hatao). */
     fun wavToPcm(wav: ByteArray): ShortArray {
         val n = (wav.size - 44) / 2

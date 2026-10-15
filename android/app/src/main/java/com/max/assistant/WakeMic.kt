@@ -104,6 +104,15 @@ class WakeMic(
         val peak = pcm.maxOf { abs(it.toInt()) }
         val peakDb = if (peak == 0) -100.0 else 20 * log10(peak / 32768.0)
         if (peakDb < COMMAND_MIN_PEAK_DB) return null // sirf chup / halka shor — koi command nahi
+        // Sach mein bola gaya? "Hello Max" ke baad ~1 sec chup (Vosk ka intezaar) par Whisper "Kala." jaisa kuch
+        // bana deta tha aur Max YouTube par "Kala" chala deta tha. Kam se kam 0.4 sec saaf aawaz chahiye.
+        val voicedFrames = (0 until pcm.size / CHUNK).count { f ->
+            var sum = 0.0
+            for (i in f * CHUNK until (f + 1) * CHUNK) sum += pcm[i].toDouble() * pcm[i]
+            val rms = kotlin.math.sqrt(sum / CHUNK)
+            rms >= 1 && 20 * log10(rms / 32768.0) > peakDb - 20 && 20 * log10(rms / 32768.0) > COMMAND_MIN_PEAK_DB
+        }
+        if (voicedFrames < MIN_VOICED_FRAMES) return null
         DebugLog.i("⚡ 'Hello Max' ke saath hi baat: ${"%.1f".format(length / SAMPLE_RATE.toDouble())} sec")
         return wav(pcm)
     }
@@ -142,7 +151,8 @@ class WakeMic(
         const val SAMPLE_RATE = 16000
         const val CHUNK = 1600 // 0.1 sec
         const val RING = SAMPLE_RATE * 8 // 8 sec yaad
-        const val MIN_COMMAND_SAMPLES = (SAMPLE_RATE * 0.7).toLong()
+        const val MIN_COMMAND_SAMPLES = (SAMPLE_RATE * 1.2).toLong()
+        const val MIN_VOICED_FRAMES = 4 // x 0.1 sec
         const val COMMAND_MIN_PEAK_DB = -40.0
     }
 }
