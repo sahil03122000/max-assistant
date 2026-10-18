@@ -380,7 +380,26 @@ class DeviceActions(
             .setPackage(pkg)
             .putExtra(SearchManager.QUERY, query)
             .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-        return Outcome(true, result = "$label par '$query' chalega", launch = intent)
+        return Outcome(true, result = "$label par '$query' chalega", launch = intent, afterLaunch = { nudgePlay(label) })
+    }
+
+    /**
+     * Spotify jaise apps "search karke bajao" par gaana load karke kabhi pause par chhod dete hain (khaas kar jab app
+     * band thi). 3 sec baad bhi kuch na baje to Play dabao; phir bhi nahi to ek baar aur.
+     */
+    private fun nudgePlay(label: String) {
+        val audio = context.getSystemService(android.media.AudioManager::class.java)
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        fun tryPlay(attempt: Int) {
+            if (audio.isMusicActive) {
+                DebugLog.i("🎵 $label baj raha hai")
+                return
+            }
+            DebugLog.i("🎵 $label ne gaana shuru nahi kiya — Play dabaya ($attempt)")
+            MediaPause.pressMediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
+            if (attempt < 2) main.postDelayed({ tryPlay(attempt + 1) }, 3_000)
+        }
+        main.postDelayed({ tryPlay(1) }, 3_500)
     }
 
     private fun playOnYouTube(args: JSONObject): Outcome {
