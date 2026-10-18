@@ -7,6 +7,8 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="sahil03122000/max-assistant"
 NOTE="${1:-Naya version}"
 cd "$ROOT"
+# Android Studio ki Java (alag se Java install na ho to)
+export JAVA_HOME="${JAVA_HOME:-/c/Program Files/Android/Android Studio/jbr}"
 [ -z "$(git status --porcelain -- app/src)" ] || { echo "❌ Pehle app ke badlaav commit karo"; exit 1; }
 CODE=$(git rev-list --count HEAD)
 ./gradlew -q assembleDebug
