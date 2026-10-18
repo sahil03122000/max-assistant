@@ -193,7 +193,7 @@ const ATTEMPTS = [
 ];
 
 // Kuch kaam phone se behtar server kar sakta hai — phone ko bhejne se pehle extra info jod do.
-async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Specific gaana bola tha (AI ne video_id nahi diya) — sabse upar wala video chala do.
   if (name === "play_on_youtube" && !args.video_id && typeof args.query === "string") {
     const [top] = await searchYouTube(args.query, 1);

@@ -471,6 +471,7 @@ private fun SettingsDialog(
                 }
                 Text("Sunne ka tareeka", style = MaterialTheme.typography.labelLarge)
                 listOf(
+                    Settings.ENGINE_LIVE to "🆕 Live (trial) — ChatGPT voice jaisa: seedha aawaz samajhta hai, beech mein bol sakte ho",
                     Settings.ENGINE_WHISPER to "Whisper — Hinglish sahi likhta hai (recommended, server chahiye)",
                     Settings.ENGINE_GOOGLE to "Google — phone ka apna (Hinglish mein kamzor)",
                 ).forEach { (id, label) ->

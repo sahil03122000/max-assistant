@@ -76,6 +76,8 @@ dependencies {
     // "Sirf meri aawaz" (Voice ID) — offline speaker recognition (Apache 2.0). Bada hai, git mein nahi:
     //   bash android/download-voice-id.sh
     implementation(files("libs/sherpa-onnx.aar"))
+    // Live mode (Gemini Live) ka WebSocket
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

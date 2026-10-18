@@ -9,9 +9,11 @@
 import { timingSafeEqual } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { handleActionResults, handleUserMessage, HttpError, type TurnResult } from "./brain.js";
+import { enrichDeviceArgs, handleActionResults, handleUserMessage, HttpError, type TurnResult } from "./brain.js";
 import { apkDownloadUrl, latestRelease, saveLog } from "./appUpdate.js";
 import { nextCallLine } from "./callTalk.js";
+import { createLiveToken } from "./live.js";
+import { isDeviceTool, runServerTool } from "./tools.js";
 import { config } from "./config.js";
 import { memoryBackend, memoryStore } from "./memory.js";
 import { getSession } from "./sessions.js";
@@ -124,6 +126,23 @@ app.post("/v1/transcribe", express.raw({ type: "audio/*", limit: "3mb" }), async
   const text = await transcribe(req.body);
   console.log(`🎙️  (beech mein) ${text || "(kuch saaf nahi)"}`);
   res.json({ text });
+});
+
+// Live mode: phone ke liye Gemini Live ki ek-baar wali chaabi (prompt + tools isi mein band).
+app.post("/v1/live/token", async (req, res) => {
+  const body = z.object({ profile: ProfileBody.optional() }).parse(req.body ?? {});
+  res.json(await createLiveToken(DEFAULT_USER, body.profile));
+});
+
+// Live mode mein AI ne kaam maanga: server wale kaam yahin, phone wale kaam ke args poore karke (YouTube video_id).
+app.post("/v1/live/tool", async (req, res) => {
+  const body = z.object({ name: z.string().max(60), args: z.record(z.string(), z.unknown()).default({}) }).parse(req.body);
+  console.log(`🎙️  live tool: ${body.name}`);
+  if (isDeviceTool(body.name)) {
+    res.json({ args: await enrichDeviceArgs(body.name, body.args) });
+  } else {
+    res.json({ result: await runServerTool(DEFAULT_USER, body.name, body.args) });
+  }
 });
 
 // Phone app ka naya version (GitHub Release se).

@@ -79,13 +79,55 @@ class MaxController(
     @Volatile private var interrupted = false
 
     fun onMicTap() {
-        if (state == MaxState.Idle) start { listenAndHandle() } else stop()
+        if (state == MaxState.Idle) start { if (isLive()) runLive(null) else listenAndHandle() } else stop()
+    }
+
+    private fun isLive() = settings.listenEngine == Settings.ENGINE_LIVE
+
+    /**
+     * Live mode: ek lagatar baat-cheet (ChatGPT voice jaisi) — Whisper/beep/baari-baari nahi. Fail ho to purana tareeka.
+     * [command]: "Hello Max" ke saath hi boli gayi baat (WAV).
+     */
+    private suspend fun runLive(command: ByteArray?) {
+        state = MaxState.Listening
+        beepNow()
+        val session = LiveSession(activity, api, actions, object : LiveSession.Listener {
+            override fun onState(state: MaxState) = activity.runOnUiThread { if (this@MaxController.state != state) this@MaxController.state = state }
+            override fun onLevel(level: Float) = activity.runOnUiThread { micLevel = level }
+            override fun onUserText(text: String) = activity.runOnUiThread { addMessage(fromUser = true, text = text) }
+            override fun onMaxText(text: String) = activity.runOnUiThread { addMessage(fromUser = false, text = text) }
+        })
+        val result = try {
+            session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DebugLog.e("Live mode nahi chala — purana tareeka", e)
+            say("Live mode abhi nahi chal paaya, purane tareeke se sunta hoon.")
+            listenAndHandle(inConversation = true)
+            return
+        }
+        micLevel = 0f
+        if (result.stopped) WakeWordService.endSession()
+        for (intent in result.launches) {
+            try {
+                activity.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                DebugLog.e("Screen nahi khuli: ${intent.action}", e)
+            }
+        }
+        result.afterLaunches.forEach { it() }
+        onLaunch() // panel band — baat-cheet khatam
     }
 
     /** "Hello Max" suna gaya — beep karo aur seedha suno. */
     /** [quick]: conversation mode mein sirf "Max" bola — greeting nahi, seedha beep aur suno. */
     fun onWake(quick: Boolean = false) {
         val command = WakeWordService.takePendingCommand()
+        if (isLive()) {
+            start { runLive(command) }
+            return
+        }
         start {
             // "Hello Max, papa ko call karo" — ek saans mein bola: greeting/beep chhodo, seedha kaam.
             if (command != null) {

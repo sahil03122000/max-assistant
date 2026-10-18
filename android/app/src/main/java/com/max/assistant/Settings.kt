@@ -67,6 +67,7 @@ class Settings(context: Context) {
         const val STYLE_PANEL = "panel"
         const val ENGINE_WHISPER = "whisper"
         const val ENGINE_GOOGLE = "google"
+        const val ENGINE_LIVE = "live"
 
         /** Server ki aawazein (server/src/tts.ts ke VOICES jaisi) + phone ki offline aawaz. */
         val VOICES = listOf(

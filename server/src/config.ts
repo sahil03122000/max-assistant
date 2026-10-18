@@ -24,6 +24,8 @@ const Env = z.object({
     .default("gemini-3.8-flash-lite-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts,gemini-3.8-flash-tts")
     .transform((s) => s.split(",").map((m) => m.trim()).filter(Boolean)),
   GEMINI_TTS_VOICE: z.string().default("Orus"),
+  // Live (aawaz se aawaz) model — free tier par sabse tez mila. Badalna ho: gemini-3.8-live, gemini-2.5-flash-native-audio-latest
+  LIVE_MODEL: z.string().default("gemini-3.1-flash-live-preview"),
   // Android app har request mein ye token bhejega, taaki koi aur aapka server use na kare.
   MAX_API_TOKEN: z.string().min(16, "MAX_API_TOKEN kam se kam 16 characters ka hona chahiye"),
   PORT: z.coerce.number().default(3000),
