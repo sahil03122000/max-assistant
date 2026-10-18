@@ -356,13 +356,25 @@ class DeviceActions(
         return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
     }
 
+    /** Phone mein kaunse music apps hain — Max sirf inhi mein se poochhe (YouTube Music nahi hai to mat poochho). */
+    fun installedMusicApps(): List<String> =
+        (listOf("YouTube" to "com.google.android.youtube") + MUSIC_APPS.values.map { (pkg, label) -> label to pkg })
+            .filter { (_, pkg) -> isInstalled(pkg) }
+            .map { it.first }
+
+    private val MUSIC_APPS = mapOf(
+        "youtube_music" to ("com.google.android.apps.youtube.music" to "YouTube Music"),
+        "spotify" to ("com.spotify.music" to "Spotify"),
+        "jiosaavn" to ("com.jio.media.jiobeats" to "JioSaavn"),
+        "gaana" to ("com.gaana" to "Gaana"),
+        "wynk" to ("com.bsbportal.music" to "Wynk Music"),
+        "amazon_music" to ("com.amazon.mp3" to "Amazon Music"),
+    )
+
     /** YouTube Music / Spotify: Android ka "search karke bajao" — app khud pehla gaana chala deta hai. */
     private fun playMusic(args: JSONObject): Outcome {
         val query = args.optString("query").ifBlank { return Outcome(false, error = "Kaunsa gaana, ye nahi mila") }
-        val (pkg, label) = when (args.optString("app")) {
-            "spotify" -> "com.spotify.music" to "Spotify"
-            else -> "com.google.android.apps.youtube.music" to "YouTube Music"
-        }
+        val (pkg, label) = MUSIC_APPS[args.optString("app")] ?: MUSIC_APPS.getValue("youtube_music")
         if (!isInstalled(pkg)) return Outcome(false, error = "$label phone mein install nahi hai — YouTube par chalaun?")
         val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
             .setPackage(pkg)

@@ -280,6 +280,9 @@ class MaxController(
      */
     private suspend fun hear(beep: Boolean, timeoutMs: Long = 8_000): String? {
         if (settings.listenEngine == Settings.ENGINE_WHISPER) {
+            // Speaker ki goonj khatam hone do (phone ki aawaz ~0.3-0.5 sec der tak bajti hai).
+            val since = android.os.SystemClock.elapsedRealtime() - lastSpeakEndAt
+            if (since < ECHO_SETTLE_MS) delay(ECHO_SETTLE_MS - since)
             val wav = recorder.record(
                 startTimeoutMs = timeoutMs,
                 // Beep tabhi jab mic sach mein sun raha ho — pehle bajne se user ke shuru ke shabd kat jaate the.
@@ -289,7 +292,10 @@ class MaxController(
             if (!isOwnersVoice(wav)) return null
             if (state == MaxState.Listening) state = MaxState.Thinking // likha ja raha hai...
             return try {
-                api.transcribe(wav).trim().ifBlank { null }
+                api.transcribe(wav).trim().ifBlank { null }?.takeUnless { heard ->
+                    // Max ka apna bola hua wapas suna gaya (goonj) — baat nahi.
+                    (wordOverlap(heard, lastSpokenText) > 0.6).also { if (it) DebugLog.i("🔁 Apni hi goonj suni — chhod di") }
+                }
             } catch (e: MaxApi.ServerException) {
                 DebugLog.e("Whisper se likha nahi gaya", e)
                 null
@@ -359,7 +365,7 @@ class MaxController(
         val launches = mutableListOf<Intent>()
         val afterLaunches = mutableListOf<() -> Unit>()
         var turn = if (!fromVoice) {
-            api.chat(sessionId, text, profiles.load().toServerJson())
+            api.chat(sessionId, text, profileJson())
         } else {
             // Max soch raha hai tab bhi suno — user ne baat badli ("nahi, 10 minute ka") to wahi nayi baat.
             when (val race = chatOrCorrection(text)) {
@@ -479,8 +485,15 @@ class MaxController(
                 bargedUtterance = utterance.await()
             }
             withContext(Dispatchers.IO) { bargeIn?.stop() }
+            lastSpeakEndAt = android.os.SystemClock.elapsedRealtime()
         }
     }
+
+    /** Max kab chup hua — turant mic kholne par apni hi aawaz ki goonj record hoti thi ("Bhej do", "Karo"). */
+    @Volatile private var lastSpeakEndAt = 0L
+
+    private fun profileJson(): JSONObject =
+        profiles.load().toServerJson().put("musicApps", JSONArray(actions.installedMusicApps()))
 
     /** Max ne aakhri baar kya bola tha (beech wali baat goonj hai ya jawab — ye jaanne ke liye). */
     @Volatile private var lastSpokenText = ""
@@ -544,6 +557,7 @@ class MaxController(
 
     private companion object {
         const val COMMAND_VOICE_CHECK = false
+        const val ECHO_SETTLE_MS = 600L
         const val NATURAL_VOICE_COOLDOWN_MS = 5 * 60 * 1000L
         const val VOICE_CACHE_MAX = 300
 
@@ -582,7 +596,7 @@ class MaxController(
 
     /** Server se jawab ka intezaar karte hue mic bhi chalu — jo pehle aaye. */
     private suspend fun chatOrCorrection(text: String): ChatRace = coroutineScope {
-        val call = async { api.chat(sessionId, text, profiles.load().toServerJson()) }
+        val call = async { api.chat(sessionId, text, profileJson()) }
         val listen = async {
             delay(600) // user ki pichhli baat ki goonj khatam hone do
             while (isActive) {

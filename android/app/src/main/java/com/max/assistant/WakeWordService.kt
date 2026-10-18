@@ -271,15 +271,17 @@ class WakeWordService : Service() {
         val greetMin = if (media) MEDIA_GREET_MIN_CONF else PHRASE_MIN_CONF
         val fullPhrase = WAKE_PHRASE.containsMatchIn(text) && maxConf >= PHRASE_MIN_CONF &&
             listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= greetMin }
+        // Video/gaana mila hone se aapka milaan bhi gir jaata hai (1.00 pakka "Hello Max" par 0.23) — tab aadhi seema.
+        val voiceNeeded = if (media) VoiceId.threshold * 0.5f else VoiceId.threshold
         // Gaana chalte waqt akela "Max" kam pakka sunai deta hai (pehle 0.90 chahiye tha → gaane ke baad "Max" nahi suna).
         // Aawaz user ki hi hai (Voice ID ne milaya) to 0.70 kaafi — gaane ki kisi line par galti se nahi jaagega.
-        val quickMin = if (media && voiceScore != null && voiceScore >= VoiceId.threshold) MEDIA_QUICK_MIN_CONF else QUICK_MIN_CONF
+        val quickMin = if (media && voiceScore != null && voiceScore >= voiceNeeded) MEDIA_QUICK_MIN_CONF else QUICK_MIN_CONF
         val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= quickMin
         if (!fullPhrase && !quick) return
         // Sirf user ki aawaz: video/TV/doosre ka "Hello Max" — mat jaago.
         if (voiceScore != null) {
-            val mine = voiceScore >= VoiceId.threshold
-            DebugLog.i("🔐 Aawaz milaan: ${"%.2f".format(voiceScore)} (seema ${"%.2f".format(VoiceId.threshold)}) → ${if (mine) "aap" else "koi aur — nahi jaaga"}")
+            val mine = voiceScore >= voiceNeeded
+            DebugLog.i("🔐 Aawaz milaan: ${"%.2f".format(voiceScore)} (seema ${"%.2f".format(voiceNeeded)}) → ${if (mine) "aap" else "koi aur — nahi jaaga"}")
             if (!mine) return
         }
         // Panel abhi band hua hai — Max ki apni aawaz ki goonj par na jaage.

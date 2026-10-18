@@ -25,6 +25,8 @@ export interface UserProfile {
   profession?: string;
   interests?: string;
   birthdayToday?: boolean;
+  /** Phone mein kaunse music apps hain (sirf naam) — "kahan chalaun?" inhi mein se. */
+  musicApps?: string[];
 }
 
 export interface Session {
