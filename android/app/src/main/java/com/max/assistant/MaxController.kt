@@ -242,6 +242,13 @@ class MaxController(
         val text = hear(beep = beepWhenReady)
         micLevel = 0f
         partialText = ""
+        if (text.isNullOrBlank() && voiceRejected) {
+            voiceRejected = false
+            DebugLog.i("Aawaz pehchani nahi — user ko bataya")
+            sayOnly("Aapki aawaz saaf pehchaan nahi paaya, thoda paas aake normal aawaz mein boliye.")
+            if (silentTries < 1) listenAndHandle(inConversation, silentTries + 1, beepWhenReady)
+            return
+        }
         if (text.isNullOrBlank()) {
             DebugLog.i("Kuch sunai nahi diya")
             if (!inConversation) return
@@ -302,12 +309,16 @@ class MaxController(
      * "Sirf meri aawaz" ON ho to wake ke baad ki baat bhi user ki honi chahiye — doston ke saath baith ke dikhate
      * waqt sabki baatein ("Kali bhejo", "news se connect...") Max ki command ban gayi thi. Doosre ki aawaz = jaise suna hi nahi.
      */
+    /** Pichhli baat Voice ID ne chhodi — user ko batao, chupchap dobara sunna confusing tha. */
+    private var voiceRejected = false
+
     private suspend fun isOwnersVoice(wav: ByteArray): Boolean {
         if (!VoiceId.isActive(activity)) return true
         val score = withContext(Dispatchers.Default) {
-            runCatching { VoiceId.score(activity, VoiceId.trimToSpeech(VoiceId.wavToPcm(wav))) }.getOrNull()
+            runCatching { VoiceId.scoreBest(activity, VoiceId.trimToSpeech(VoiceId.wavToPcm(wav))) }.getOrNull()
         } ?: return true
         val mine = score >= VoiceId.threshold
+        if (!mine) voiceRejected = true
         DebugLog.i("🔐 Baat kiski: ${"%.2f".format(score)} → ${if (mine) "aap" else "koi aur — chhod di"}")
         return mine
     }

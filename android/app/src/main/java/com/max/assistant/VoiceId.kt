@@ -95,6 +95,18 @@ object VoiceId {
         threshold = t
     }
 
+    /**
+     * Lambi recording (shor + aapki 2 sec ki baat) ka milaan poori recording par kam aata tha (0.12) — 2 sec ke
+     * tukdon mein dekho, aapki aawaz kahin bhi ho to sabse achha tukda.
+     */
+    fun scoreBest(context: Context, pcm: ShortArray): Float? {
+        val window = 32_000 // 2 sec
+        if (pcm.size <= window + 8_000) return score(context, pcm)
+        return (0..pcm.size - window step 16_000)
+            .mapNotNull { from -> score(context, pcm.copyOfRange(from, from + window)) }
+            .maxOrNull()
+    }
+
     private fun samples(context: Context): List<FloatArray> =
         prefs(context).getString("samples", null).orEmpty().split("|").filter { it.isNotBlank() }
             .map { s -> s.split(",").map(String::toFloat).toFloatArray() }

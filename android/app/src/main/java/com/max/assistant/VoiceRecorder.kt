@@ -70,6 +70,7 @@ class VoiceRecorder {
                 DebugLog.i("🎙️ User beep se pehle hi bol raha tha — wahi se record")
                 preRoll.forEach { speech.write(toBytes(it)) }
             }
+            val recent = ArrayDeque<Double>()
             var loud = 0
             var quiet = 0
             var frames = 0
@@ -82,6 +83,8 @@ class VoiceRecorder {
                 val chunk = frame.copyOf(n)
                 val db = rmsDb(chunk, n)
                 frames++
+                recent.addLast(db)
+                while (recent.size > NOISE_WINDOW_FRAMES) recent.removeFirst()
                 onLevel(((db - floor) / 30).toFloat().coerceIn(0f, 1f))
                 if (!started) {
                     // Beep ke dauraan bhi aawaz rakh lo — user aksar beep ke saath hi bolna shuru karta hai
@@ -104,7 +107,10 @@ class VoiceRecorder {
                 speech.write(toBytes(chunk))
                 // Chup = aawaz user ke apne peak se kaafi neeche (ya shor jitni) — kamre ka halka shor "bolna" na lage.
                 peak = maxOf(peak, db)
-                val quietBelow = maxOf(startDb - 3, peak - 22)
+                // Kamre ka shor (pankha/AC) pehle naapne se tez nikla to chup kabhi aati hi nahi thi — har baar poore
+                // 12 sec record hota tha. Isliye chalte-chalte bhi shor naapo (haal ki aawaz ka neeche wala 20%).
+                val noise = recent.sorted()[recent.size / 5]
+                val quietBelow = maxOf(startDb - 3, peak - 22, minOf(noise + 6, peak - 8))
                 quiet = if (db < quietBelow) quiet + 1 else 0
                 if (quiet >= END_SILENCE_FRAMES || speech.size() > SAMPLE_RATE * 2 * MAX_SECONDS) break
             }
@@ -145,7 +151,8 @@ class VoiceRecorder {
         const val PRE_ROLL_FRAMES = 40 // 0.8 sec
         const val START_FRAMES = 4 // 80 ms lagatar aawaz
         const val END_SILENCE_FRAMES = 40 // 0.8 sec chup
-        const val MAX_SECONDS = 12
+        const val MAX_SECONDS = 10
+        const val NOISE_WINDOW_FRAMES = 150 // 3 sec
         const val DEFAULT_FLOOR_DB = -60.0
         // Shor naapte waqt aawaz isse tez = koi bol raha hai (kamre ka shor itna tez nahi hota).
         const val SPEAKING_DB = -40.0
