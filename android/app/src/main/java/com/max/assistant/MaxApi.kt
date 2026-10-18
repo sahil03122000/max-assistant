@@ -32,7 +32,7 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 8_000
-            conn.readTimeout = 30_000
+            conn.readTimeout = 75_000 // so rahe free server ko jaagne mein ~50 sec
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "audio/wav")
             conn.setRequestProperty("Authorization", "Bearer $token")

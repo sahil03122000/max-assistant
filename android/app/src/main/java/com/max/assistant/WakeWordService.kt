@@ -135,6 +135,13 @@ class WakeWordService : Service() {
     // "Hello Max" sun raha hai, har 10 min ek chhota ping bhejo taaki jawab turant aaye.
     private val keepAlive = object : Runnable {
         override fun run() {
+            pingServer()
+            main.postDelayed(this, 10 * 60 * 1000L)
+        }
+    }
+
+    /** Server ko jagao. Phone so raha ho (Doze) to 10 min wala ping ruk jaata hai — isliye "Hello Max" par bhi. */
+    private fun pingServer() {
             val url = Settings(this@WakeWordService).serverUrl.trimEnd('/') + "/health"
             Thread {
                 runCatching {
@@ -145,8 +152,6 @@ class WakeWordService : Service() {
                     conn.disconnect()
                 }
             }.start()
-            main.postDelayed(this, 10 * 60 * 1000L)
-        }
     }
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -295,6 +300,8 @@ class WakeWordService : Service() {
 
     private fun onWake(quick: Boolean, command: ByteArray?) {
         pauseListening()
+        // Server so gaya ho to abhi se jagana shuru — jab tak Max "Haan ji" bole aur aap bolo, wo uth jaaye.
+        pingServer()
         // Chalti video/reel turant roko (panel khulne ka intezaar nahi) — panel khud apni rok le lega.
         MediaPause.hold(this, WAKE_MEDIA_HOLD, autoReleaseMs = 10_000)
         // "Hello Max, papa ko call karo" — wake word ke saath hi bola gaya kaam panel ko de do.
