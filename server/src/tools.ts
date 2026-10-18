@@ -294,9 +294,9 @@ export async function runServerTool(userId: string, name: string, args: Record<s
       };
     }
     case "get_weather":
-      return getWeather(String(args.city ?? ""), args.day === "tomorrow" ? "tomorrow" : "today").catch(() => ({
+      return getWeather(String(args.city ?? ""), args.day === "tomorrow" ? "tomorrow" : "today").catch((err) => ({
         ok: false,
-        error: "Mausam ki service abhi jawab nahi de rahi",
+        error: `Mausam ki service abhi jawab nahi de rahi (${err instanceof Error ? err.message : err})`,
       }));
     case "get_news":
       return getNews(typeof args.topic === "string" && args.topic.trim() ? args.topic.trim() : undefined).catch(() => ({

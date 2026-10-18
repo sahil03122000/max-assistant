@@ -26,13 +26,66 @@ const WEATHER_WORDS: Record<number, string> = {
   99: "tez toofan aur ole",
 };
 
+const WEATHER_TIP = "1-2 chhote vaakya mein bolo (taapmaan, aasmaan, baarish ka chance). Baarish 50%+ ho to chhata le jaane ki salah.";
+
+/** Pehle Open-Meteo; wo cloud server (Render) ko kabhi jawab nahi deta — tab wttr.in. */
 export async function getWeather(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
+  try {
+    return await openMeteo(city, day);
+  } catch (err) {
+    console.warn(`  🌦️ Open-Meteo fail (${err instanceof Error ? err.message : err}), wttr.in try...`);
+    return wttr(city, day);
+  }
+}
+
+export async function wttr(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
+  const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, {
+    headers: { "User-Agent": "curl/8" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`wttr.in ${res.status}`);
+  const w = (await res.json()) as {
+    current_condition: { temp_C: string; FeelsLikeC: string; humidity: string; windspeedKmph: string; weatherDesc: { value: string }[] }[];
+    weather: { maxtempC: string; mintempC: string; hourly: { chanceofrain: string; weatherDesc: { value: string }[] }[] }[];
+    nearest_area?: { areaName: { value: string }[]; region: { value: string }[] }[];
+  };
+  const d = w.weather[day === "tomorrow" ? 1 : 0];
+  const now = w.current_condition[0];
+  if (!d || !now) throw new Error("wttr.in khaali jawab");
+  const area = w.nearest_area?.[0];
+  return {
+    ok: true,
+    place: [area?.areaName[0]?.value ?? city, area?.region[0]?.value].filter(Boolean).join(", "),
+    day,
+    ...(day === "today"
+      ? {
+          now: {
+            temperature_c: Number(now.temp_C),
+            feels_like_c: Number(now.FeelsLikeC),
+            humidity_percent: Number(now.humidity),
+            sky_english: now.weatherDesc[0]?.value,
+            wind_kmh: Number(now.windspeedKmph),
+          },
+        }
+      : {}),
+    max_c: Number(d.maxtempC),
+    min_c: Number(d.mintempC),
+    sky_day_english: d.hourly[4]?.weatherDesc[0]?.value,
+    rain_chance_percent: Math.max(...d.hourly.map((h) => Number(h.chanceofrain) || 0)),
+    instructions: WEATHER_TIP + " Aasmaan English mein hai — Hinglish mein bolo.",
+  };
+}
+
+async function openMeteo(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
   const geo = (await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en`,
     { signal: AbortSignal.timeout(8000) },
   ).then((r) => r.json())) as { results?: { name: string; admin1?: string; country?: string; latitude: number; longitude: number }[] };
   const place = geo.results?.[0];
-  if (!place) return { ok: false, error: `'${city}' naam ki jagah nahi mili — user se shehar ka naam dobara poocho` };
+  if (!place) {
+    if ((geo as { error?: unknown }).error) throw new Error("Open-Meteo ne mana kiya");
+    return { ok: false, error: `'${city}' naam ki jagah nahi mili — user se shehar ka naam dobara poocho` };
+  }
 
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}` +
@@ -62,7 +115,7 @@ export async function getWeather(city: string, day: "today" | "tomorrow"): Promi
     min_c: Math.round(w.daily.temperature_2m_min[i] ?? NaN),
     sky_day: WEATHER_WORDS[w.daily.weather_code[i] ?? -1] ?? "mila-jula",
     rain_chance_percent: w.daily.precipitation_probability_max[i],
-    instructions: "1-2 chhote vaakya mein bolo (taapmaan, aasmaan, baarish ka chance). Baarish 50%+ ho to chhata le jaane ki salah.",
+    instructions: WEATHER_TIP,
   };
 }
 
