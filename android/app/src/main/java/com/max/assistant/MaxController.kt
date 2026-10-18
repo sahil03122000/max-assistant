@@ -313,6 +313,10 @@ class MaxController(
     private var voiceRejected = false
 
     private suspend fun isOwnersVoice(wav: ByteArray): Boolean {
+        // Band: wake ke baad ki baat par milaan bharose ka nahi nikla — user ki apni baatein bhi 0.09-0.33 aati thi
+        // (save sirf "Hello Max" se, upar se Max ki goonj/shor) aur har baar "aawaz pehchaan nahi paaya" bolta tha.
+        // Voice ID ab sirf "Hello Max" par (wahan 0.8-0.9 aata hai). Wapas chalu karna ho to ye line hatao.
+        if (!COMMAND_VOICE_CHECK) return true
         if (!VoiceId.isActive(activity)) return true
         val score = withContext(Dispatchers.Default) {
             runCatching { VoiceId.scoreBest(activity, VoiceId.trimToSpeech(VoiceId.wavToPcm(wav))) }.getOrNull()
@@ -539,6 +543,7 @@ class MaxController(
     private val voiceCacheDir = File(activity.cacheDir, "voice").apply { mkdirs() }
 
     private companion object {
+        const val COMMAND_VOICE_CHECK = false
         const val NATURAL_VOICE_COOLDOWN_MS = 5 * 60 * 1000L
         const val VOICE_CACHE_MAX = 300
 
