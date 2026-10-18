@@ -159,7 +159,8 @@ async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Pr
   // Specific gaana bola tha (AI ne video_id nahi diya) — sabse upar wala video chala do.
   if (name === "play_on_youtube" && !args.video_id && typeof args.query === "string") {
     const [top] = await searchYouTube(args.query, 1);
-    if (top) return { ...args, video_id: top.videoId };
+    // Title bhi — Max bataye ki asal mein kya chalaya ("Shree Hanuman Chalisa"), galat ho to user turant bol sake.
+    if (top) return { ...args, video_id: top.videoId, video_title: top.title };
   }
   return args;
 }

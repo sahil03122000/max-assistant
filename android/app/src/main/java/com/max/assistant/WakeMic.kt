@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
@@ -47,66 +48,95 @@ class WakeMic(
         thread = null
     }
 
+    /** Echo cancel wala mic phone par zero de raha ho to dobara try mat karo. */
+    @Volatile private var aecBroken = false
+
     @SuppressLint("MissingPermission") // RECORD_AUDIO app start par maangi jaati hai
-    private fun loop() {
-        val recognizer = Recognizer(model, SAMPLE_RATE.toFloat(), grammar).apply { setWords(true) }
+    private fun openMic(echoCancel: Boolean): AudioRecord? {
         val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        // Gaana/video chal raha ho to video-call wala mic (VOICE_COMMUNICATION): phone apni hi bajti aawaz ko kaafi
+        // had tak kaat deta hai, jaise ChatGPT voice / video call mein — warna gaane mein "Hello Max" dab jaata tha.
+        val source = if (echoCancel) MediaRecorder.AudioSource.VOICE_COMMUNICATION else MediaRecorder.AudioSource.VOICE_RECOGNITION
         val record = try {
-            AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, CHUNK * 4),
-            )
+            AudioRecord(source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, CHUNK * 4))
         } catch (e: Exception) {
             DebugLog.e("Wake word mic nahi khula", e)
-            recognizer.close()
-            running = false
-            return
+            return null
         }
+        if (echoCancel && AcousticEchoCanceler.isAvailable()) {
+            runCatching { AcousticEchoCanceler.create(record.audioSessionId)?.enabled = true }
+        }
+        return record
+    }
+
+    private fun loop() {
+        val recognizer = Recognizer(model, SAMPLE_RATE.toFloat(), grammar).apply { setWords(true) }
         // Ring buffer: hamesha pichhle RING samples (~8 sec). fed = ab tak kitne samples aaye.
         val ring = ShortArray(RING)
         var fed = 0L
+        val buffer = ShortArray(CHUNK)
+        var chunks = 0
+        var maxHeardAt = -1
         try {
-            record.startRecording()
-            val buffer = ShortArray(CHUNK)
-            var chunks = 0
-            var maxHeardAt = -1
             while (running) {
-                val n = record.read(buffer, 0, CHUNK)
-                if (n <= 0) continue
-                for (i in 0 until n) ring[((fed + i) % RING).toInt()] = buffer[i]
-                fed += n
-                chunks++
-                var final = recognizer.acceptWaveForm(buffer, n)
-                var json = if (final) recognizer.result else null
-                if (!final && chunks % 3 == 0) {
-                    // Vosk tabhi poora result deta hai jab bolne ke baad chup ho. Video chalte waqt chup aati hi nahi —
-                    // "Hello Max" sun kar bhi Max nahi jaagta tha (video pause karte hi jaagta). Adhoore result mein
-                    // "max" aaye to: video chal raha ho to turant, warna 2 sec baad bhi chup na aaye to — faisla abhi.
-                    val partial = runCatching { JSONObject(recognizer.partialResult).optString("partial") }.getOrDefault("")
-                    if (MAX_WORD.containsMatchIn(partial)) {
-                        if (maxHeardAt < 0) maxHeardAt = chunks
-                        val waited = chunks - maxHeardAt
-                        if ((mediaPlaying() && waited >= 3) || waited >= 20) {
-                            json = recognizer.finalResult
-                            final = true
+                // Media chalu/band hone par mic badlo (echo cancel wala sirf tab, normal mein saaf mic behtar hai).
+                val echoCancel = mediaPlaying() && !aecBroken
+                val record = openMic(echoCancel) ?: break
+                DebugLog.i(if (echoCancel) "🎧 Gaana/video chal raha — echo cancel wala mic" else "🎙️ Normal mic")
+                try {
+                    record.startRecording()
+                    var silentChunks = 0
+                    while (running) {
+                        val n = record.read(buffer, 0, CHUNK)
+                        if (n <= 0) continue
+                        for (i in 0 until n) ring[((fed + i) % RING).toInt()] = buffer[i]
+                        fed += n
+                        chunks++
+                        if (echoCancel) {
+                            // Kuch phones is mic se bilkul zero dete hain — 3 sec zero = ye tareeka band.
+                            silentChunks = if ((0 until n).all { buffer[it].toInt() == 0 }) silentChunks + 1 else 0
+                            if (silentChunks >= 30) {
+                                aecBroken = true
+                                DebugLog.i("🎧 Echo cancel mic se aawaz nahi aa rahi — normal mic par")
+                                break
+                            }
                         }
-                    } else {
-                        maxHeardAt = -1
+                        if (chunks % 20 == 0 && mediaPlaying() != echoCancel && !(echoCancel && aecBroken)) break
+                        var final = recognizer.acceptWaveForm(buffer, n)
+                        var json = if (final) recognizer.result else null
+                        if (!final && chunks % 3 == 0) {
+                            // Vosk tabhi poora result deta hai jab bolne ke baad chup ho. Video chalte waqt chup aati hi nahi —
+                            // "Hello Max" sun kar bhi Max nahi jaagta tha (video pause karte hi jaagta). Adhoore result mein
+                            // "max" aaye to: video chal raha ho to turant, warna 2 sec baad bhi chup na aaye to — faisla abhi.
+                            val partial = runCatching { JSONObject(recognizer.partialResult).optString("partial") }.getOrDefault("")
+                            if (MAX_WORD.containsMatchIn(partial)) {
+                                if (maxHeardAt < 0) maxHeardAt = chunks
+                                val waited = chunks - maxHeardAt
+                                if ((echoCancel && waited >= 3) || waited >= 20) {
+                                    json = recognizer.finalResult
+                                    final = true
+                                }
+                            } else {
+                                maxHeardAt = -1
+                            }
+                        }
+                        if (final && json != null) {
+                            maxHeardAt = -1
+                            val command = commandAfterMax(json, ring, fed)
+                            val score = verify?.let { v -> wakePhrase(json, ring, fed)?.let { pcm -> runCatching { v(pcm) }.getOrNull() } }
+                            main.post { onFinal(json, command, score) }
+                        }
                     }
-                }
-                if (final && json != null) {
-                    maxHeardAt = -1
-                    val command = commandAfterMax(json, ring, fed)
-                    val score = verify?.let { v -> wakePhrase(json, ring, fed)?.let { pcm -> runCatching { v(pcm) }.getOrNull() } }
-                    main.post { onFinal(json, command, score) }
+                } finally {
+                    runCatching { record.stop() }
+                    record.release()
                 }
             }
         } catch (e: Exception) {
             DebugLog.e("Wake word mic error", e)
         } finally {
-            runCatching { record.stop() }
-            record.release()
             recognizer.close()
+            running = false
         }
     }
 

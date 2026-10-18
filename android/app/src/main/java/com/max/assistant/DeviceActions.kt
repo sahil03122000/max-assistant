@@ -56,6 +56,7 @@ class DeviceActions(
             "set_reminder" -> setReminder(args)
             "open_app" -> openApp(args)
             "play_on_youtube" -> playOnYouTube(args)
+            "play_music" -> playMusic(args)
             "media_control" -> mediaControl(args)
             "open_camera" -> openCamera(args)
             "unlock_phone" -> unlockPhone()
@@ -355,6 +356,21 @@ class DeviceActions(
         return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
     }
 
+    /** YouTube Music / Spotify: Android ka "search karke bajao" — app khud pehla gaana chala deta hai. */
+    private fun playMusic(args: JSONObject): Outcome {
+        val query = args.optString("query").ifBlank { return Outcome(false, error = "Kaunsa gaana, ye nahi mila") }
+        val (pkg, label) = when (args.optString("app")) {
+            "spotify" -> "com.spotify.music" to "Spotify"
+            else -> "com.google.android.apps.youtube.music" to "YouTube Music"
+        }
+        if (!isInstalled(pkg)) return Outcome(false, error = "$label phone mein install nahi hai — YouTube par chalaun?")
+        val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            .setPackage(pkg)
+            .putExtra(SearchManager.QUERY, query)
+            .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+        return Outcome(true, result = "$label par '$query' chalega", launch = intent)
+    }
+
     private fun playOnYouTube(args: JSONObject): Outcome {
         val query = args.optString("query").ifBlank { return Outcome(false, error = "Kya chalana hai ye nahi mila") }
         val hasYouTube = isInstalled("com.google.android.youtube")
@@ -366,7 +382,8 @@ class DeviceActions(
             } else {
                 Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
             }
-            return Outcome(true, result = "YouTube par '$query' ka video chalega", launch = intent)
+            val title = args.optString("video_title").ifBlank { query }
+            return Outcome(true, result = "YouTube par '$title' chalega", launch = intent)
         }
         val intent = if (hasYouTube) {
             Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra(SearchManager.QUERY, query)

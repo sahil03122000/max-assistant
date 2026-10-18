@@ -191,6 +191,19 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "play_music",
+    description:
+      "Gaana YouTube Music ya Spotify app mein seedha chalao (app khud search karke bajata hai). YouTube (video) ke liye play_on_youtube.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: { type: Type.STRING, description: "Gaane/singer ka naam, saaf spelling mein, jaise 'Hanumankind Big Dawgs'" },
+        app: { type: Type.STRING, enum: ["youtube_music", "spotify"], description: "Kis app mein" },
+      },
+      required: ["query", "app"],
+    },
+  },
+  {
     name: "play_on_youtube",
     description:
       "YouTube par gaana ya video chalao. Agar search_youtube se user ne koi video chuna hai to uska video_id do; specific gaane ka naam ho to sirf query kaafi hai.",

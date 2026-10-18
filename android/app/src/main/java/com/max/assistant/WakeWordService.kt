@@ -46,6 +46,7 @@ class WakeWordService : Service() {
         private const val PHRASE_MIN_CONF = 0.70
         private const val QUICK_MIN_CONF = 0.90
         private const val MEDIA_GREET_MIN_CONF = 0.50
+        private const val MEDIA_QUICK_MIN_CONF = 0.70
         private val SESSION_PHRASE = Regex("""\bmax\b""")
         private val WAKE_PHRASE = Regex("""\b(hello|hey|hi) max\b""")
 
@@ -270,7 +271,10 @@ class WakeWordService : Service() {
         val greetMin = if (media) MEDIA_GREET_MIN_CONF else PHRASE_MIN_CONF
         val fullPhrase = WAKE_PHRASE.containsMatchIn(text) && maxConf >= PHRASE_MIN_CONF &&
             listOf("hello", "hey", "hi").any { (conf[it] ?: 0.0) >= greetMin }
-        val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= QUICK_MIN_CONF
+        // Gaana chalte waqt akela "Max" kam pakka sunai deta hai (pehle 0.90 chahiye tha → gaane ke baad "Max" nahi suna).
+        // Aawaz user ki hi hai (Voice ID ne milaya) to 0.70 kaafi — gaane ki kisi line par galti se nahi jaagega.
+        val quickMin = if (media && voiceScore != null && voiceScore >= VoiceId.threshold) MEDIA_QUICK_MIN_CONF else QUICK_MIN_CONF
+        val quick = !fullPhrase && sessionActive && SESSION_PHRASE.containsMatchIn(text) && maxConf >= quickMin
         if (!fullPhrase && !quick) return
         // Sirf user ki aawaz: video/TV/doosre ka "Hello Max" — mat jaago.
         if (voiceScore != null) {
