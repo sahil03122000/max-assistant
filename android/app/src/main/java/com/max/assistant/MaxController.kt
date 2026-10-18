@@ -212,7 +212,7 @@ class MaxController(
         bargedUtterance?.let { wav ->
             bargedUtterance = null
             state = MaxState.Thinking
-            val heard = try {
+            val heard = if (!isOwnersVoice(wav)) "" else try {
                 api.transcribe(wav).trim()
             } catch (e: CancellationException) {
                 throw e
@@ -279,6 +279,7 @@ class MaxController(
                 onReady = { if (beep) beepNow() },
                 onLevel = { micLevel = it },
             ) ?: return null
+            if (!isOwnersVoice(wav)) return null
             if (state == MaxState.Listening) state = MaxState.Thinking // likha ja raha hai...
             return try {
                 api.transcribe(wav).trim().ifBlank { null }
@@ -296,6 +297,20 @@ class MaxController(
     }
 
     private val recorder = VoiceRecorder()
+
+    /**
+     * "Sirf meri aawaz" ON ho to wake ke baad ki baat bhi user ki honi chahiye — doston ke saath baith ke dikhate
+     * waqt sabki baatein ("Kali bhejo", "news se connect...") Max ki command ban gayi thi. Doosre ki aawaz = jaise suna hi nahi.
+     */
+    private suspend fun isOwnersVoice(wav: ByteArray): Boolean {
+        if (!VoiceId.isActive(activity)) return true
+        val score = withContext(Dispatchers.Default) {
+            runCatching { VoiceId.score(activity, VoiceId.trimToSpeech(VoiceId.wavToPcm(wav))) }.getOrNull()
+        } ?: return true
+        val mine = score >= VoiceId.threshold
+        DebugLog.i("🔐 Baat kiski: ${"%.2f".format(score)} → ${if (mine) "aap" else "koi aur — chhod di"}")
+        return mine
+    }
 
     /** Bolo aur dikhao, lekin history mein save mat karo ("aap wahan hain?" jaisi baatein). */
     private suspend fun sayOnly(text: String) {

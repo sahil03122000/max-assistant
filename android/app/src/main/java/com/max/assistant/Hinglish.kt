@@ -21,5 +21,11 @@ object SessionCommands {
         RegexOption.IGNORE_CASE,
     )
 
-    fun isStop(text: String): Boolean = STOP.matches(Hinglish.romanize(text).trim())
+    /** "Max stop, abhi baad mein..." — "Max stop" se shuru ho to baaki baat kuch bhi ho, rukna hai. */
+    private val STOP_PREFIX = Regex("""^(?:max|maks|maiks|meks)[,.!\s]+(?:stop|band\s*karo|chup)\b""", RegexOption.IGNORE_CASE)
+
+    fun isStop(text: String): Boolean {
+        val t = Hinglish.romanize(text).trim()
+        return STOP.matches(t) || STOP_PREFIX.containsMatchIn(t)
+    }
 }
