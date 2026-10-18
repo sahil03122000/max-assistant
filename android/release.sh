@@ -19,11 +19,13 @@ TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill | sed
 [ -n "$TOKEN" ] || { echo "❌ GitHub login nahi mila (ek baar git push karo)"; exit 1; }
 api() { curl -sS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
 
-BODY=$(printf '{"tag_name":"v%s","target_commitish":"%s","name":"Max v%s","body":%s}' \
+# Pehle "draft" (chhupi) — upload poora hone tak phone ko adhoori release na dikhe; phir publish.
+BODY=$(printf '{"tag_name":"v%s","target_commitish":"%s","name":"Max v%s","draft":true,"body":%s}' \
   "$CODE" "$(git rev-parse HEAD)" "$CODE" "$(printf '%s' "$NOTE" | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.stringify(String(d))))')")
 RELEASE=$(api -X POST "https://api.github.com/repos/$REPO/releases" -d "$BODY")
 ID=$(printf '%s' "$RELEASE" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(!j.id){console.error(j.message||s);process.exit(1)}console.log(j.id)})')
 echo "⬆️ Release v$CODE bani, APK upload ho rahi hai ($(du -m "$APK" | cut -f1) MB)..."
 api -X POST -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$APK" \
   "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=max-v$CODE.apk" -o /dev/null -w "upload: %{http_code}\n"
+api -X PATCH "https://api.github.com/repos/$REPO/releases/$ID" -d '{"draft":false}' -o /dev/null -w "publish: %{http_code}\n"
 echo "✅ Max v$CODE ready — phone par Settings → App update → Check karo"
