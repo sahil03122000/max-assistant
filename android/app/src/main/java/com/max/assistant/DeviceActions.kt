@@ -375,6 +375,7 @@ class DeviceActions(
     private fun playMusic(args: JSONObject): Outcome {
         val query = args.optString("query").ifBlank { return Outcome(false, error = "Kaunsa gaana, ye nahi mila") }
         val (pkg, label) = MUSIC_APPS[args.optString("app")] ?: MUSIC_APPS.getValue("youtube_music")
+        Settings(context).musicApp = label
         if (!isInstalled(pkg)) return Outcome(false, error = "$label phone mein install nahi hai — YouTube par chalaun?")
         val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
             .setPackage(pkg)
@@ -407,6 +408,7 @@ class DeviceActions(
         val hasYouTube = isInstalled("com.google.android.youtube")
         // Server ne video dhundh liya ho to seedha wahi chalao.
         val videoId = args.optString("video_id")
+        if (args.optBoolean("is_song")) Settings(context).musicApp = "YouTube"
         if (videoId.isNotBlank()) {
             val intent = if (hasYouTube) {
                 Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId")).setPackage("com.google.android.youtube")

@@ -97,12 +97,14 @@ class MaxController(
                     ""
                 }
                 DebugLog.i("⚡ Ek saans mein: '$text'")
-                if (text.isNotBlank() && !justInterrupt.matches(text)) {
+                // Dobara "Hello Max" hi bola ho to wo kaam nahi — seedha suno (pehle "kya karna hai?" wala faltu sawaal aata tha).
+                val onlyWakeWords = Regex("""^[\s,.!?]*((hello|hey|hi|haan|ha)[\s,.!?]*)*(max|maks)?[\s,.!?]*$""", RegexOption.IGNORE_CASE)
+                if (text.isNotBlank() && !justInterrupt.matches(text) && !onlyWakeWords.matches(text)) {
                     handle(text, fromVoice = true)
                     return@start
                 }
             }
-            if (!quick) greet()
+            if (!quick && command == null) greet()
             listenAndHandle(inConversation = true) // mic taiyaar hote hi "ab bolo" beep
         }
     }
@@ -493,7 +495,9 @@ class MaxController(
     @Volatile private var lastSpeakEndAt = 0L
 
     private fun profileJson(): JSONObject =
-        profiles.load().toServerJson().put("musicApps", JSONArray(actions.installedMusicApps()))
+        profiles.load().toServerJson()
+            .put("musicApps", JSONArray(actions.installedMusicApps()))
+            .apply { settings.musicApp.takeIf { it.isNotBlank() }?.let { put("musicApp", it) } }
 
     /** Max ne aakhri baar kya bola tha (beech wali baat goonj hai ya jawab — ye jaanne ke liye). */
     @Volatile private var lastSpokenText = ""

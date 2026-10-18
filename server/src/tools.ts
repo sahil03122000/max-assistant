@@ -216,6 +216,7 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
       properties: {
         query: { type: Type.STRING, description: "Kya chalana hai (gaane/video ka naam)" },
         video_id: { type: Type.STRING, description: "search_youtube se mila video_id (optional)" },
+        is_song: { type: Type.BOOLEAN, description: "true agar gaana hai (video/show nahi) — phone YouTube ko gaane ka app yaad rakhega" },
       },
       required: ["query"],
     },

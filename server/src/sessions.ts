@@ -27,6 +27,8 @@ export interface UserProfile {
   birthdayToday?: boolean;
   /** Phone mein kaunse music apps hain (sirf naam) — "kahan chalaun?" inhi mein se. */
   musicApps?: string[];
+  /** Gaane kahan sunte hain (phone yaad rakhta hai — aakhri baar jahan chalaya). */
+  musicApp?: string;
 }
 
 export interface Session {

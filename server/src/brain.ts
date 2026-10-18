@@ -112,7 +112,32 @@ function functionResponse(id: string | undefined, name: string, response: Record
   return { functionResponse: { id, name, response } };
 }
 
+// "chala diya", "laga raha hoon", "bhej diya", "call kar raha" — kaam ho jaane ka daawa.
+const ACTION_CLAIM = /\b(chala|chalaa|laga|lagaa|baja|bajaa|bhej|khol|set|call)\s*(diya|di|raha|rahi|rahe|deta|dunga|doonga|kar\s*(diya|raha|rahi)|ho\s*gaya)\b|\b(play|playing|opened|set)\b/i;
+
+function claimsAction(reply: string): boolean {
+  return ACTION_CLAIM.test(reply);
+}
+
+/** Is baat (user ke aakhri text se ab tak) mein koi tool chala? Tab "chala diya" sach hai — kaam ke baad ka jawab. */
+function turnHadToolCall(session: Session): boolean {
+  for (let i = session.history.length - 1; i >= 0; i--) {
+    const c = session.history[i]!;
+    if (c.parts?.some((p) => p.functionCall)) return true;
+    const isUserText = c.role === "user" && c.parts?.some((p) => p.text && !p.text.startsWith("[System:"));
+    if (isUserText) return false;
+  }
+  return false;
+}
+
+/** Yaad-dihaani wala system message history se hatao (agli baat-cheet mein na rahe). */
+function dropNudge(session: Session): void {
+  const i = session.history.findIndex((c) => c.role === "user" && c.parts?.[0]?.text?.startsWith("[System: tumne kaam ka tool"));
+  if (i >= 0) session.history.splice(i, 1);
+}
+
 async function runLoop(session: Session): Promise<TurnResult> {
+  let nudged = false;
   for (let step = 0; step < MAX_STEPS; step++) {
     const memories = await memoryStore.list(session.userId);
     const content = await think(session.history, buildSystemPrompt(memories, new Date(), session.profile));
@@ -120,7 +145,20 @@ async function runLoop(session: Session): Promise<TurnResult> {
 
     const reply = spokenText(content);
     const calls = (content.parts ?? []).flatMap((p) => (p.functionCall ? [p.functionCall] : []));
-    if (calls.length === 0) return { status: "done", reply: reply || "Hmm, ek baar phir se bolo?" };
+    if (calls.length === 0) {
+      // AI ne bola "chala raha hoon / laga diya" par tool call kiya hi nahi — user samjhega ho gaya, hua kuch nahi.
+      // Ek baar yaad dila ke dobara sochne do.
+      if (!nudged && claimsAction(reply) && !reply.trim().endsWith("?") && !turnHadToolCall(session) && step < MAX_STEPS - 1) {
+        nudged = true;
+        console.warn(`  ⚠️ Kaam bola par tool nahi: "${reply.slice(0, 60)}" — dobara`);
+        session.history.pop();
+        session.history.push({ role: "user", parts: [{ text: "[System: tumne kaam ka tool call nahi kiya. Abhi sahi tool call karo — sirf bolne se kaam nahi hota.]" }] });
+        continue;
+      }
+      if (nudged) dropNudge(session);
+      return { status: "done", reply: reply || "Hmm, ek baar phir se bolo?" };
+    }
+    if (nudged) dropNudge(session);
 
     const slots: PendingSlot[] = [];
     for (const call of calls) slots.push(await toSlot(session.userId, call));

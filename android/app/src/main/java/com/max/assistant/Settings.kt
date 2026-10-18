@@ -26,6 +26,11 @@ class Settings(context: Context) {
         set(value) = prefs.edit { putString("whatsapp_choice", value) }
 
     /** "Hello Max" wake word chalu hai ya nahi. */
+    /** Gaane kahan sunte ho (aakhri baar jahan chalaya) — Max dobara nahi poochhega. */
+    var musicApp: String
+        get() = prefs.getString("music_app", null).orEmpty()
+        set(value) = prefs.edit { putString("music_app", value) }
+
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)
         set(value) = prefs.edit { putBoolean("wake_word", value) }

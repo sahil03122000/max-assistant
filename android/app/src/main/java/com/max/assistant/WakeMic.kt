@@ -80,7 +80,9 @@ class WakeMic(
         try {
             while (running) {
                 // Media chalu/band hone par mic badlo (echo cancel wala sirf tab, normal mein saaf mic behtar hai).
-                val echoCancel = mediaPlaying() && !aecBroken
+                // Band: OnePlus par echo-cancel mic gaana chalte waqt khaali aawaz deta tha (Max kuch nahi sunta tha).
+                // Normal mic se video ke beech bhi "Hello Max" 1.00 pakka suna gaya tha — wahi rakho.
+                val echoCancel = USE_ECHO_CANCEL && mediaPlaying() && !aecBroken
                 val record = openMic(echoCancel) ?: break
                 DebugLog.i(if (echoCancel) "🎧 Gaana/video chal raha — echo cancel wala mic" else "🎙️ Normal mic")
                 try {
@@ -206,6 +208,7 @@ class WakeMic(
         const val RING = SAMPLE_RATE * 8 // 8 sec yaad
         const val MIN_COMMAND_SAMPLES = (SAMPLE_RATE * 1.2).toLong()
         const val MIN_VOICED_FRAMES = 4 // x 0.1 sec
+        const val USE_ECHO_CANCEL = false
         val MAX_WORD = Regex("""\bmax\b""")
         const val COMMAND_MIN_PEAK_DB = -40.0
     }
