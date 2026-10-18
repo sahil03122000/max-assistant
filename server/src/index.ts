@@ -10,6 +10,7 @@ import { timingSafeEqual } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { handleActionResults, handleUserMessage, HttpError, type TurnResult } from "./brain.js";
+import { apkDownloadUrl, latestRelease, saveLog } from "./appUpdate.js";
 import { nextCallLine } from "./callTalk.js";
 import { config } from "./config.js";
 import { memoryBackend, memoryStore } from "./memory.js";
@@ -121,6 +122,23 @@ app.post("/v1/transcribe", express.raw({ type: "audio/*", limit: "3mb" }), async
   const text = await transcribe(req.body);
   console.log(`🎙️  (beech mein) ${text || "(kuch saaf nahi)"}`);
   res.json({ text });
+});
+
+// Phone app ka naya version (GitHub Release se).
+app.get("/v1/app/latest", async (_req, res) => {
+  res.json({ release: await latestRelease() });
+});
+
+app.get("/v1/app/download", async (_req, res) => {
+  res.json({ url: await apkDownloadUrl() });
+});
+
+// "Logs bhejo" — phone ke debug logs (private, Supabase Storage mein).
+app.post("/v1/logs", express.text({ type: "text/*", limit: "2mb" }), async (req, res) => {
+  if (typeof req.body !== "string" || !req.body.trim()) throw new HttpError(400, "Log khaali hai");
+  const name = await saveLog(req.body);
+  console.log(`📤 Phone ke logs aaye: ${name}`);
+  res.json({ ok: true, name });
 });
 
 app.get("/v1/memories", async (_req, res) => {

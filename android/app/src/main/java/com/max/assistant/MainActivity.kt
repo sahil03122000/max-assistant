@@ -411,6 +411,7 @@ private fun SettingsDialog(
                     }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
                 }
                 VoiceIdRow()
+                UpdateRow()
                 Text("\"Hello Max\" par kya dikhe", style = MaterialTheme.typography.labelLarge)
                 listOf(
                     Settings.STYLE_LIGHT to "🌈 Sirf screen ke kinaron par RGB light",
@@ -535,6 +536,7 @@ private fun LogScreen(onClose: () -> Unit) {
                     clipboard.setPrimaryClip(ClipData.newPlainText("Max log", DebugLog.lines.joinToString("\n")))
                     Toast.makeText(context, "Log copy ho gaya", Toast.LENGTH_SHORT).show()
                 }) { Text("Copy") }
+                SendLogsButton()
                 TextButton(onClick = onClose) { Text("Close") }
             }
             LazyColumn(Modifier.fillMaxSize()) {

@@ -10,6 +10,10 @@ val maxProps = Properties().apply {
     rootProject.file("max.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
+// Version = git commits ki ginti — har nayi release apne aap bada number (App update isi se pehchanta hai).
+val gitCommits = providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }
+    .standardOutput.asText.get().trim().toIntOrNull() ?: 1
+
 android {
     namespace = "com.max.assistant"
     compileSdk {
@@ -20,8 +24,8 @@ android {
         applicationId = "com.max.assistant"
         minSdk = 28
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = gitCommits
+        versionName = "0.$gitCommits"
 
         // Sirf 64-bit ARM (aaj ke saare phones) — Voice ID/Vosk ki dusri CPU wali files se app 50+ MB bhaari hota.
         ndk { abiFilters += "arm64-v8a" }

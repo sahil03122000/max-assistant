@@ -32,6 +32,9 @@ const Env = z.object({
   // Memory database (cloud). Dono na hon to memory local JSON file mein save hoti hai.
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_KEY: z.string().min(1).optional(),
+  // App update: GitHub ka fine-grained token (sirf is repo, Contents: Read-only) — nayi APK Release se dene ke liye.
+  GITHUB_TOKEN: z.string().min(1).optional(),
+  GITHUB_REPO: z.string().default("sahil03122000/max-assistant"),
 });
 
 const parsed = Env.safeParse(process.env);
