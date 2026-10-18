@@ -6,6 +6,7 @@
 //  - SERVER tools: server par hi chalte hain (memory save/delete).
 import { Type, type FunctionDeclaration } from "@google/genai";
 import { memoryStore } from "./memory.js";
+import { getNews, getWeather } from "./liveInfo.js";
 import { searchYouTube } from "./youtube.js";
 
 const contactName = {
@@ -206,6 +207,27 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
 
 const SERVER_TOOLS: FunctionDeclaration[] = [
   {
+    name: "get_weather",
+    description:
+      "Mausam (aaj ya kal): taapmaan, aasmaan, baarish ka chance. Shehar user ne na bola ho to profile wala shehar; wo bhi na ho to user se poocho.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        city: { type: Type.STRING, description: "Shehar ka naam English mein, jaise 'Jaipur', 'Delhi'" },
+        day: { type: Type.STRING, enum: ["today", "tomorrow"], description: "Aaj ya kal" },
+      },
+      required: ["city"],
+    },
+  },
+  {
+    name: "get_news",
+    description: "Aaj ki taaza khabrein (India). Kisi vishay ki khabar chahiye to topic do, jaise 'cricket', 'Jaipur', 'share market'.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { topic: { type: Type.STRING, description: "Optional vishay" } },
+    },
+  },
+  {
     name: "search_youtube",
     description:
       "YouTube par search karke top videos (title, channel, duration, video_id) lao — jab user ne koi specific gaana nahi bataya aur use options dene hain.",
@@ -271,6 +293,16 @@ export async function runServerTool(userId: string, name: string, args: Record<s
         options: picked.map((v, i) => ({ option: i + 1, title: v.title, channel: v.channel, video_id: v.videoId })),
       };
     }
+    case "get_weather":
+      return getWeather(String(args.city ?? ""), args.day === "tomorrow" ? "tomorrow" : "today").catch(() => ({
+        ok: false,
+        error: "Mausam ki service abhi jawab nahi de rahi",
+      }));
+    case "get_news":
+      return getNews(typeof args.topic === "string" && args.topic.trim() ? args.topic.trim() : undefined).catch(() => ({
+        ok: false,
+        error: "Khabrein abhi nahi mil rahi",
+      }));
     case "remember": {
       const memory = await memoryStore.add(userId, String(args.fact ?? ""), String(args.category ?? "other"));
       return { ok: true, memory_id: memory.id };
