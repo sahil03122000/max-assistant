@@ -28,20 +28,26 @@ const WEATHER_WORDS: Record<number, string> = {
 
 const WEATHER_TIP = "1-2 chhote vaakya mein bolo (taapmaan, aasmaan, baarish ka chance). Baarish 50%+ ho to chhata le jaane ki salah.";
 
-/** Pehle Open-Meteo; wo cloud server (Render) ko kabhi jawab nahi deta — tab wttr.in. */
+/**
+ * Dono ek saath poochho, jo pehle sahi jawab de wahi — Open-Meteo Render par atak jaata tha (8+8 sec) phir wttr.in,
+ * aur Live mode mein user 30 sec chup baitha rehta tha.
+ */
 export async function getWeather(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
+  const results = [openMeteo(city, day), wttr(city, day)].map((p) =>
+    p.then((r) => (r.ok ? r : Promise.reject(new Error(String(r.error))))),
+  );
   try {
-    return await openMeteo(city, day);
+    return await Promise.any(results);
   } catch (err) {
-    console.warn(`  🌦️ Open-Meteo fail (${err instanceof Error ? err.message : err}), wttr.in try...`);
-    return wttr(city, day);
+    console.warn(`  🌦️ Mausam dono jagah fail: ${err instanceof AggregateError ? err.errors.map(String).join(" | ") : err}`);
+    return { ok: false, error: "Mausam ki service abhi jawab nahi de rahi" };
   }
 }
 
 export async function wttr(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
   const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, {
     headers: { "User-Agent": "curl/8" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(6_000),
   });
   if (!res.ok) throw new Error(`wttr.in ${res.status}`);
   const w = (await res.json()) as {
@@ -79,7 +85,7 @@ export async function wttr(city: string, day: "today" | "tomorrow"): Promise<Rec
 async function openMeteo(city: string, day: "today" | "tomorrow"): Promise<Record<string, unknown>> {
   const geo = (await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en`,
-    { signal: AbortSignal.timeout(8000) },
+    { signal: AbortSignal.timeout(4000) },
   ).then((r) => r.json())) as { results?: { name: string; admin1?: string; country?: string; latitude: number; longitude: number }[] };
   const place = geo.results?.[0];
   if (!place) {
@@ -91,7 +97,7 @@ async function openMeteo(city: string, day: "today" | "tomorrow"): Promise<Recor
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}` +
     "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2";
-  const w = (await fetch(url, { signal: AbortSignal.timeout(8000) }).then((r) => r.json())) as {
+  const w = (await fetch(url, { signal: AbortSignal.timeout(4000) }).then((r) => r.json())) as {
     current: { temperature_2m: number; apparent_temperature: number; relative_humidity_2m: number; weather_code: number; wind_speed_10m: number };
     daily: { weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[]; precipitation_probability_max: number[] };
   };

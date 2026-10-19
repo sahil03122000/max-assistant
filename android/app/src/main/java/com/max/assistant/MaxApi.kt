@@ -62,7 +62,7 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
 
     /** Live mode: server wala kaam (memory/mausam/news) ya phone wale kaam ke poore args. */
     suspend fun liveTool(name: String, args: JSONObject): JSONObject =
-        JSONObject(String(request("/v1/live/tool", JSONObject().put("name", name).put("args", args), readTimeoutMs = 30_000)))
+        JSONObject(String(request("/v1/live/tool", JSONObject().put("name", name).put("args", args), readTimeoutMs = 20_000)))
 
     /** Text → natural aawaz (WAV bytes). */
     suspend fun tts(text: String, voice: String): ByteArray =

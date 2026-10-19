@@ -142,6 +142,36 @@ fun WhatsAppRepliesRow() {
     }
 }
 
+/** Settings ki line: "🔒 Lock screen par Max" — phone lock ho tab bhi "Hello Max" par panel khule (Android 14+ ijazat). */
+@Composable
+fun LockScreenRow() {
+    val context = LocalContext.current
+    if (android.os.Build.VERSION.SDK_INT < 34) return
+    val nm = context.getSystemService(android.app.NotificationManager::class.java)
+    val allowed = nm.canUseFullScreenIntent()
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+            Text("🔒 Lock screen par Max", style = MaterialTheme.typography.labelLarge)
+            Text(
+                if (allowed) "ON — phone lock ho tab bhi 'Hello Max' par jaagega" else "OFF — lock phone par Max ka panel nahi khulta",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!allowed) {
+            TextButton(onClick = {
+                Toast.makeText(context, "Max → Allow full screen notifications → ON", Toast.LENGTH_LONG).show()
+                context.startActivity(
+                    android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                        android.net.Uri.parse("package:${context.packageName}"),
+                    ),
+                )
+            }) { Text("Chalu karo") }
+        }
+    }
+}
+
 /** Log screen ka "📤 Bhejo" button. */
 @Composable
 fun SendLogsButton() {

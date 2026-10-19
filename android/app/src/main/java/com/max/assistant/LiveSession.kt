@@ -186,7 +186,11 @@ class LiveSession(
                     // Chupchap band hona ajeeb lagta tha — ek baar bata do ki Max sun raha hai.
                     nudged = true
                     lastActivityAt = now
-                    sendText("[User kuch der se chup hai. Bas itna bolo: \"Main sun raha hoon, kuch kaam ho to boliye.\" — aur kuch nahi, koi tool nahi.]")
+                    sendText(
+                        "[User kuch der se chup hai. Agar tumhara pichhla jawab ek sawaal tha jiska jawab nahi aaya, to wahi sawaal " +
+                            "chhota karke ek baar dobara poochho. Warna bas itna bolo: \"Main sun raha hoon, kuch kaam ho to boliye.\" " +
+                            "— aur kuch nahi, koi tool nahi.]",
+                    )
                     continue
                 }
                 if (!isPlaying() && nudged && now - lastActivityAt > IDLE_END_MS) {
@@ -307,8 +311,16 @@ class LiveSession(
                 val fullArgs = if (name == "play_on_youtube") api.liveTool(name, args).optJSONObject("args") ?: args else args
                 val outcome = actions.run(MaxApi.Action("live-${SystemClock.elapsedRealtime()}", name, fullArgs))
                 DebugLog.i("📱 $name $fullArgs → ${if (outcome.ok) "ok" else "FAIL: ${outcome.error}"}")
-                outcome.launch?.let(launches::add)
-                outcome.afterLaunch?.let(afterLaunches::add)
+                val launch = outcome.launch
+                if (launch != null && name == "open_app") {
+                    // App kholna baat-cheet khatam nahi karta — app khol do, Max sunta rahe aur poochhe "isme kya karna hai?"
+                    runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        .onFailure { DebugLog.e("App nahi khuli", it) }
+                    outcome.afterLaunch?.invoke()
+                } else {
+                    launch?.let(launches::add)
+                    outcome.afterLaunch?.let(afterLaunches::add)
+                }
                 JSONObject().put("ok", outcome.ok).apply {
                     outcome.result?.let { put("result", it) }
                     outcome.error?.let { put("error", it) }

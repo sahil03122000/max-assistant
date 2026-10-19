@@ -561,6 +561,7 @@ private fun SettingsScreen(
                     }
                     VoiceIdRow()
                     WhatsAppRepliesRow()
+                    LockScreenRow()
                 }
 
                 SectionCard("App") {
