@@ -76,6 +76,7 @@ class LiveSession(
     @Volatile private var ready = false
     /** "Hello Max" ke saath koi kaam nahi bola — Max pehle "Haan ji, boliye" jaisa chhota jawab de (purane jaisa). */
     private var greetOnStart = false
+    private var greeting = "Haan ji, boliye"
     @Volatile private var messages = 0
     @Volatile private var sentChunks = 0
     @Volatile private var micPeakDb = -100.0
@@ -86,6 +87,10 @@ class LiveSession(
 
     suspend fun run(profile: JSONObject, firstPcm: ShortArray?): Result = coroutineScope {
         greetOnStart = firstPcm == null
+        // Har baar thodi alag, chhoti line — "kaise ho" har baar sunna irritate karta tha.
+        val name = profile.optString("callingName").trim()
+        greeting = (if (name.isNotEmpty()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
+        else listOf("Haan ji, boliye", "Ji, bataiye", "Haan ji?")).random()
         val tokenJson = api.liveToken(profile)
         val model = tokenJson.getString("model")
         val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build()
@@ -186,8 +191,8 @@ class LiveSession(
                                         JSONArray().put(
                                             JSONObject().put(
                                                 "text",
-                                                "[User ne abhi 'Hello Max' bola. Unke naam ke saath bas 3-5 shabd ka garam jawab do, " +
-                                                    "jaise 'Haan ji Gupta ji, boliye' — aur kuch nahi, koi tool nahi.]",
+                                                "[User ne abhi 'Hello Max' bola. Bilkul yahi line bolo, ek shabd bhi zyada nahi " +
+                                                    "(\"kaise ho\" ya koi sawaal nahi, koi tool nahi): \"$greeting\"]",
                                             ),
                                         ),
                                     ),
