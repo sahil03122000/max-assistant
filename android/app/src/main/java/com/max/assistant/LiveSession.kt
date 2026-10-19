@@ -89,8 +89,19 @@ class LiveSession(
     /** User ne "Max stop"/"bye" bola — Max so jaaye. */
     @Volatile private var stopped = false
 
-    suspend fun run(profile: JSONObject, firstPcm: ShortArray?, firstInstruction: String? = null): Result = coroutineScope {
-        greetOnStart = firstPcm == null
+    /**
+     * Phone khud "Haan ji, boliye" bajata hai jab tak Google se jud rahe hain (5-7 sec ka intezaar khatam). Tab tak
+     * mic ki aawaz phenko (warna Google us greeting ko user ki baat samajhta).
+     */
+    @Volatile var micMutedUntil = 0L
+
+    suspend fun run(
+        profile: JSONObject,
+        firstPcm: ShortArray?,
+        firstInstruction: String? = null,
+        greetByModel: Boolean = true,
+    ): Result = coroutineScope {
+        greetOnStart = firstInstruction != null || (firstPcm == null && greetByModel)
         this@LiveSession.firstInstruction = firstInstruction
         // Har baar thodi alag, chhoti line — "kaise ho" har baar sunna irritate karta tha.
         val name = profile.optString("callingName").trim()
@@ -171,8 +182,15 @@ class LiveSession(
             if (idle != null && idle.isClosed) break
             val now = SystemClock.elapsedRealtime()
             if (idle == null) {
-                if (!isPlaying() && now - lastActivityAt > IDLE_END_MS) {
-                    DebugLog.i("🌐 Live: 20 sec chup — band")
+                if (!isPlaying() && !nudged && now - lastActivityAt > IDLE_NUDGE_MS) {
+                    // Chupchap band hona ajeeb lagta tha — ek baar bata do ki Max sun raha hai.
+                    nudged = true
+                    lastActivityAt = now
+                    sendText("[User kuch der se chup hai. Bas itna bolo: \"Main sun raha hoon, kuch kaam ho to boliye.\" — aur kuch nahi, koi tool nahi.]")
+                    continue
+                }
+                if (!isPlaying() && nudged && now - lastActivityAt > IDLE_END_MS) {
+                    DebugLog.i("🌐 Live: chup — band")
                     break
                 }
                 if ((ending || launches.isNotEmpty()) && !isPlaying()) break
@@ -213,6 +231,7 @@ class LiveSession(
                 content.optJSONObject("inputTranscription")?.optString("text")?.takeIf { it.isNotBlank() }?.let {
                     userText.append(it)
                     lastActivityAt = now
+                    nudged = false
                     if (SessionCommands.isStop(userText.toString())) {
                         ending = true
                         stopped = true
@@ -238,7 +257,7 @@ class LiveSession(
                 }
                 if (content.optBoolean("turnComplete")) {
                     flushUser(userText).also { userText = StringBuilder() }
-                    maxText.toString().trim().takeIf { it.isNotEmpty() }?.let {
+                    Hinglish.romanize(maxText.toString().trim()).takeIf { it.isNotEmpty() }?.let {
                         DebugLog.i("Max: $it")
                         listener.onMaxText(it)
                     }
@@ -304,6 +323,18 @@ class LiveSession(
         JSONObject().put("ok", false).put("error", e.message ?: "fail")
     }
 
+    private var nudged = false
+
+    private fun sendText(text: String) = send(
+        JSONObject().put(
+            "clientContent",
+            JSONObject().put(
+                "turns",
+                JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", text)))),
+            ).put("turnComplete", true),
+        ),
+    )
+
     private fun send(json: JSONObject) {
         if (!closed) socket?.send(json.toString())
     }
@@ -351,6 +382,7 @@ class LiveSession(
                             break
                         }
                     }
+                    if (SystemClock.elapsedRealtime() < micMutedUntil) continue
                     if (!ready) {
                         pending.addLast(chunk)
                         while (pending.size > 100) pending.removeFirst() // max ~10 sec
@@ -488,7 +520,8 @@ class LiveSession(
         const val IN_RATE = 16000
         const val OUT_RATE = 24000
         const val CHUNK = 1600 // 0.1 sec
-        const val IDLE_END_MS = 20_000L
+        const val IDLE_NUDGE_MS = 15_000L
+        const val IDLE_END_MS = 15_000L
         const val ECHO_TAIL_MS = 900L
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",

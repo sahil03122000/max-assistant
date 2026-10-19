@@ -105,15 +105,35 @@ class MaxController(
      */
     private suspend fun runLive(command: ByteArray?, firstInstruction: String? = null) {
         state = MaxState.Listening
-        beepNow()
         val session = LiveSession(activity, api, actions, object : LiveSession.Listener {
             override fun onState(state: MaxState) = activity.runOnUiThread { if (this@MaxController.state != state) this@MaxController.state = state }
             override fun onLevel(level: Float) = activity.runOnUiThread { micLevel = level }
             override fun onUserText(text: String) = activity.runOnUiThread { addMessage(fromUser = true, text = text) }
             override fun onMaxText(text: String) = activity.runOnUiThread { addMessage(fromUser = false, text = text) }
         })
+        // "Hello Max" par turant apni (saved) aawaz mein "Haan ji, boliye" — Google se judne ke 3-5 sec ka sannata nahi.
+        val localGreeting = command == null && firstInstruction == null
+        if (localGreeting) {
+            session.micMutedUntil = Long.MAX_VALUE
+            scope.launch {
+                val name = profiles.load().displayName
+                val text = (if (name.isNotBlank()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
+                else listOf("Haan ji, boliye", "Ji, bataiye", "Haan ji?")).random()
+                addMessage(fromUser = false, text = text, saveToHistory = false)
+                try {
+                    val wav = if (settings.voice == Settings.PHONE_VOICE) null else withTimeoutOrNull(2_500) { fetchVoice(text, settings.voice) }
+                    if (wav != null) voicePlayer.play(wav) else speaker.speak(text, settings.phoneVoice)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    DebugLog.e("Greeting nahi baji", e)
+                } finally {
+                    session.micMutedUntil = android.os.SystemClock.elapsedRealtime() + 700 // goonj
+                }
+            }
+        }
         val result = try {
-            session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) }, firstInstruction)
+            session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) }, firstInstruction, greetByModel = !localGreeting)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

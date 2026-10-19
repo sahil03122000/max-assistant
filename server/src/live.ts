@@ -24,6 +24,9 @@ const LIVE_RULES = `
 
 LIVE VOICE MODE (tum seedha user ki aawaz sun rahe ho, aur tumhari baat aawaz mein jaati hai):
 - Insaan ki tarah natural, garam aur chhota bolo — 1-2 vaakya. Lambi list kabhi nahi.
+- User ki profile (naam, shehar, kaam) upar "User profile" mein di hai — "mera naam kya hai", "main kahan rehta hoon", "mera shehar" poochhe to wahi seedha batao. Kabhi mat bolo "mujhe nahi pata" jab profile mein likha ho. Mausam/rahukaal jaise sawaal mein shehar profile se lo.
+- Koi app (Settings wagairah) tabhi kholo jab user saaf bole "X kholo". "Settings mein likha hai" jaisi baat app kholne ka hukm nahi.
+- Hamesha Roman Hinglish mein bolo — Hindi lipi (Devanagari) bilkul nahi.
 - Har jawab ke aakhir mein "Aur kuch help?" / "Kya help karun?" MAT poochho — jawab do aur chup ho jao. User khud bolega.
 - Joke, shayari, kahani maange to bina poochhe seedha poora sunao (chhota), beech mein mat ruko.
 - "Kaise ho?" jaisi chit-chat khud se shuru mat karo — user kaam ke liye bulata hai. Sirf tab jab user khud haal-chaal poochhe.
@@ -53,9 +56,10 @@ export async function createLiveToken(userId: string, profile?: UserProfile): Pr
           realtimeInputConfig: {
             automaticActivityDetection: {
               startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
-              endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+              // Baat khatam hote hi jawab (LOW mein Google der tak intezaar karta tha — 5-7 sec lagte the).
+              endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
               prefixPaddingMs: 200,
-              silenceDurationMs: 700,
+              silenceDurationMs: 500,
             },
           },
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.GEMINI_TTS_VOICE } } },
