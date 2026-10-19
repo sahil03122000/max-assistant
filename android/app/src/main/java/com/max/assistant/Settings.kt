@@ -31,6 +31,11 @@ class Settings(context: Context) {
         get() = prefs.getString("music_app", null).orEmpty()
         set(value) = prefs.edit { putString("music_app", value) }
 
+    /** Live mode: is phone par echo-cancel mic khaali deta hai (OnePlus) — seedha normal mic/speaker se shuru karo. */
+    var liveEchoCancelBroken: Boolean
+        get() = prefs.getBoolean("live_aec_broken", false)
+        set(value) = prefs.edit { putBoolean("live_aec_broken", value) }
+
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)
         set(value) = prefs.edit { putBoolean("wake_word", value) }

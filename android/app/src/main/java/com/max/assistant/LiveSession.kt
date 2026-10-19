@@ -60,6 +60,7 @@ class LiveSession(
     class Result(val launches: List<Intent>, val afterLaunches: List<() -> Unit>, val stopped: Boolean)
 
     private val audio = context.getSystemService(AudioManager::class.java)
+    private val settings = Settings(context)
     private val incoming = Channel<JSONObject>(Channel.UNLIMITED)
     private val playback = Channel<ByteArray>(Channel.UNLIMITED)
     private val launches = mutableListOf<Intent>()
@@ -114,9 +115,15 @@ class LiveSession(
         oldModeForFallback = oldMode
         try {
             // Call jaisa mode: phone ka echo cancel tabhi theek chalta hai. Aawaz speaker par (earpiece nahi).
-            audio.mode = AudioManager.MODE_IN_COMMUNICATION
-            useSpeaker()
-            startPlayer()
+            // Is phone par pehle hi pata chal gaya ki echo-cancel mic khaali deta hai → seedha normal mode.
+            if (settings.liveEchoCancelBroken) {
+                halfDuplex = true
+                startPlayer(AudioAttributes.USAGE_ASSISTANT)
+            } else {
+                audio.mode = AudioManager.MODE_IN_COMMUNICATION
+                useSpeaker()
+                startPlayer(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            }
             val player = launch(Dispatchers.IO) { playLoop() }
             val mic = launch(Dispatchers.IO) { micLoop(firstPcm) }
             lastActivityAt = SystemClock.elapsedRealtime()
@@ -129,8 +136,10 @@ class LiveSession(
             closed = true
             socket?.close(1000, null)
             client.dispatcher.executorService.shutdown()
-            track?.let { runCatching { it.stop() }; it.release() }
-            track = null
+            synchronized(trackLock) {
+                track?.let { runCatching { it.stop() }; it.release() }
+                track = null
+            }
             if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
             audio.mode = oldMode
         }
@@ -266,7 +275,7 @@ class LiveSession(
         val pending = ArrayDeque<ShortArray>()
         // "Hello Max, papa ko call karo" — saath wali baat pehle bhejo.
         firstPcm?.let { pcm -> pcm.toList().chunked(CHUNK).forEach { pending.addLast(it.toShortArray()) } }
-        var echoCancel = true
+        var echoCancel = !settings.liveEchoCancelBroken
         while (isActive && !closed) {
             val record = openMic(echoCancel) ?: break
             try {
@@ -295,6 +304,9 @@ class LiveSession(
                             halfDuplex = true
                             if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
                             audio.mode = AudioManager.MODE_NORMAL
+                            // Normal mode mein "call" wali aawaz bahut dheemi/earpiece par — Max ki aawaz sunai nahi deti thi.
+                            startPlayer(AudioAttributes.USAGE_ASSISTANT)
+                            settings.liveEchoCancelBroken = true
                             break
                         }
                     }
@@ -372,12 +384,15 @@ class LiveSession(
         }
     }
 
-    private fun startPlayer() {
+    private val trackLock = Any()
+
+    private fun startPlayer(usage: Int) = synchronized(trackLock) {
+        track?.let { runCatching { it.stop() }; it.release() }
         val min = AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(usage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
@@ -394,10 +409,12 @@ class LiveSession(
 
     private suspend fun playLoop() {
         for (bytes in playback) {
-            val t = track ?: break
             listener.onState(MaxState.Speaking)
-            t.write(bytes, 0, bytes.size)
-            framesWritten += bytes.size / 2
+            synchronized(trackLock) {
+                val t = track ?: return
+                t.write(bytes, 0, bytes.size)
+                framesWritten += bytes.size / 2
+            }
         }
     }
 
