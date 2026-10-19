@@ -74,6 +74,8 @@ class LiveSession(
     @Volatile private var halfDuplex = false
     /** Google ne "setupComplete" bheja — usse pehle aawaz bhejna galat (pehle setup jaana chahiye). */
     @Volatile private var ready = false
+    /** "Hello Max" ke saath koi kaam nahi bola — Max pehle "Haan ji, boliye" jaisa chhota jawab de (purane jaisa). */
+    private var greetOnStart = false
     @Volatile private var messages = 0
     @Volatile private var sentChunks = 0
     @Volatile private var micPeakDb = -100.0
@@ -83,6 +85,7 @@ class LiveSession(
     @Volatile private var stopped = false
 
     suspend fun run(profile: JSONObject, firstPcm: ShortArray?): Result = coroutineScope {
+        greetOnStart = firstPcm == null
         val tokenJson = api.liveToken(profile)
         val model = tokenJson.getString("model")
         val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build()
@@ -171,6 +174,28 @@ class LiveSession(
             if (msg.has("setupComplete")) {
                 DebugLog.i("🌐 Live: Google taiyaar — ab aawaz ja rahi hai")
                 ready = true
+                if (greetOnStart) {
+                    send(
+                        JSONObject().put(
+                            "clientContent",
+                            JSONObject().put(
+                                "turns",
+                                JSONArray().put(
+                                    JSONObject().put("role", "user").put(
+                                        "parts",
+                                        JSONArray().put(
+                                            JSONObject().put(
+                                                "text",
+                                                "[User ne abhi 'Hello Max' bola. Unke naam ke saath bas 3-5 shabd ka garam jawab do, " +
+                                                    "jaise 'Haan ji Gupta ji, boliye' — aur kuch nahi, koi tool nahi.]",
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ).put("turnComplete", true),
+                        ),
+                    )
+                }
                 listener.onState(MaxState.Listening)
                 continue
             }
