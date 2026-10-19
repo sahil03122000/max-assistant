@@ -357,7 +357,9 @@ class LiveSession(
                         continue
                     }
                     while (pending.isNotEmpty()) sendAudio(pending.removeFirst())
-                    if (halfDuplex && isPlaying()) continue
+                    // Max bol raha hai ya abhi-abhi chup hua (kamre mein uski goonj ~0.8 sec) — mic ki aawaz mat bhejo,
+                    // warna Google apni hi goonj ko user ki baat samajh ke khud se baat karta rehta tha.
+                    if (halfDuplex && (isPlaying() || SystemClock.elapsedRealtime() - lastPlayedAt < ECHO_TAIL_MS)) continue
                     if (toolRunning) continue
                     sendAudio(chunk)
                 }
@@ -452,6 +454,7 @@ class LiveSession(
     private suspend fun playLoop() {
         for (bytes in playback) {
             listener.onState(MaxState.Speaking)
+            lastPlayedAt = SystemClock.elapsedRealtime()
             synchronized(trackLock) {
                 val t = track ?: return
                 t.write(bytes, 0, bytes.size)
@@ -474,15 +477,19 @@ class LiveSession(
     private fun isPlaying(): Boolean {
         val t = track ?: return false
         val playing = t.playbackHeadPosition.toLong() and 0xffffffffL < framesWritten
-        if (!playing) listener.onState(MaxState.Listening)
+        if (playing) lastPlayedAt = SystemClock.elapsedRealtime() else listener.onState(MaxState.Listening)
         return playing
     }
+
+    /** Max ki aawaz aakhri baar kab baj rahi thi (goonj ke liye mic thoda der aur band). */
+    @Volatile private var lastPlayedAt = 0L
 
     private companion object {
         const val IN_RATE = 16000
         const val OUT_RATE = 24000
         const val CHUNK = 1600 // 0.1 sec
         const val IDLE_END_MS = 20_000L
+        const val ECHO_TAIL_MS = 900L
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",
             "set_alarm", "set_timer", "set_reminder", "open_app", "play_on_youtube", "play_music", "media_control",

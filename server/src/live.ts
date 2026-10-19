@@ -5,7 +5,7 @@
 //   AI kaam maange (toolCall): device tool → phone khud; server tool (memory/mausam/news/YouTube) → POST /v1/live/tool
 //
 // Prompt, tools, aawaz — sab yahin token mein band (phone badal nahi sakta).
-import { GoogleGenAI, Modality, type FunctionDeclaration } from "@google/genai";
+import { EndSensitivity, GoogleGenAI, Modality, StartSensitivity, type FunctionDeclaration } from "@google/genai";
 import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
 import { buildSystemPrompt } from "./prompt.js";
@@ -47,6 +47,15 @@ export async function createLiveToken(userId: string, profile?: UserProfile): Pr
         config: {
           responseModalities: [Modality.AUDIO],
           systemInstruction,
+          // Halka shor / Max ki apni goonj ko "user bola" na samjhe (warna khud se baat karta rehta tha).
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+              endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+              prefixPaddingMs: 200,
+              silenceDurationMs: 700,
+            },
+          },
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.GEMINI_TTS_VOICE } } },
           // Dono taraf ka likha hua bhi aaye — screen par dikhane, history aur logs ke liye.
           inputAudioTranscription: {},
