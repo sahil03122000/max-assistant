@@ -471,26 +471,15 @@ class DeviceActions(
 
     /** Max ka apna camera: selfie (coach ke saath), photo, video. */
     private fun openCamera(args: JSONObject): Outcome {
-        val mode = when (args.optString("mode")) {
-            "video" -> CameraActivity.MODE_VIDEO
-            "photo" -> CameraActivity.MODE_PHOTO
-            else -> CameraActivity.MODE_SELFIE
-        }
+        // Max ka apna camera hata diya (user ki marzi) — hamesha phone ka asli Camera app (ya Snapchat/Instagram).
+        val mode = args.optString("mode")
         val front = when (args.optString("camera")) {
             "front" -> true
             "back" -> false
-            else -> mode != CameraActivity.MODE_PHOTO
+            else -> mode != "photo"
         }
-        val video = mode == CameraActivity.MODE_VIDEO
+        val video = mode == "video"
         return when (args.optString("app").ifBlank { "phone" }) {
-            "max" -> {
-                val what = when (mode) {
-                    CameraActivity.MODE_VIDEO -> "video recording"
-                    CameraActivity.MODE_PHOTO -> "photo"
-                    else -> "selfie (Max chehra dekh ke guide karega aur khud click karega)"
-                }
-                Outcome(true, result = "Max ka camera khulega: $what", launch = CameraActivity.intent(context, mode, front))
-            }
             "snapchat" -> {
                 val launch = context.packageManager.getLaunchIntentForPackage("com.snapchat.android")
                     ?: return Outcome(false, error = "Phone mein Snapchat install nahi hai")

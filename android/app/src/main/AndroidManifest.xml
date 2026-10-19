@@ -29,15 +29,6 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- Phone lock ho tab "Hello Max" par panel kholna (alarm/call jaisa full-screen) -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-    <!-- Max ka camera: selfie, photo, video (sab phone par hi, kahin upload nahi) -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-    <!-- Sirf Android 9 ke liye: photo/video gallery mein save karna -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
     <!-- "Hello Max" sunte hi halki vibration -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Battery saver Max ki service band na kare -->
@@ -116,13 +107,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/max_accessibility" />
         </service>
-
-        <!-- Max ka camera (selfie coach) -->
-        <activity
-            android:name=".CameraActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.Max" />
 
         <receiver
             android:name=".ReminderReceiver"
