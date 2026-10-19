@@ -193,6 +193,7 @@ const ATTEMPTS = [
 ];
 
 // Kuch kaam phone se behtar server kar sakta hai — phone ko bhejne se pehle extra info jod do.
+const recentVideos: string[] = [];
 const GENERIC_WORDS = new Set(["song", "songs", "gaana", "gana", "gaane", "video", "full", "new", "latest", "the", "and", "ka", "ki", "ke"]);
 
 export async function enrichDeviceArgs(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -200,9 +201,14 @@ export async function enrichDeviceArgs(name: string, args: Record<string, unknow
   if (name === "play_on_youtube" && !args.video_id && typeof args.query === "string") {
     // YouTube ka pehla result kabhi alag gaana hota hai ("Hanuman Ansh" par "Parvati - Full Song") — upar ke 5 mein se
     // wo lo jiske naam mein user ke saare khaas shabd hon; koi na mile to pehla.
-    const results = await searchYouTube(args.query, 5);
+    // Haal mein chala hua dobara nahi ("doosra chalao" par wahi gaana aa jaata tha).
+    const results = (await searchYouTube(args.query, 8)).filter((v) => !recentVideos.includes(v.videoId));
     const words = args.query.toLowerCase().split(/\s+/).filter((w) => w.length > 2 && !GENERIC_WORDS.has(w));
     const top = results.find((v) => words.length > 0 && words.every((w) => v.title.toLowerCase().includes(w))) ?? results[0];
+    if (top) {
+      recentVideos.push(top.videoId);
+      if (recentVideos.length > 20) recentVideos.shift();
+    }
     // Title bhi — Max bataye ki asal mein kya chalaya ("Shree Hanuman Chalisa"), galat ho to user turant bol sake.
     if (top) return { ...args, video_id: top.videoId, video_title: top.title };
   }

@@ -71,7 +71,9 @@ class MaxController(
     )
 
     // Ek app session = ek baat-cheet. App band karke kholo to nayi.
-    private val sessionId = UUID.randomUUID().toString()
+    // Har "Hello Max" naya panel/controller banata hai — par 15 min ke andar wahi baat-cheet (purana mode bhi
+    // "doosra chalao" jaisi baat samjhe).
+    private val sessionId = sharedSessionId()
     private var job: Job? = null
     private var currentRun = 0
     // "Hello Max" sunna rokne ke liye is controller ka naam (har panel ka alag).
@@ -108,8 +110,15 @@ class MaxController(
         val session = LiveSession(activity, api, actions, object : LiveSession.Listener {
             override fun onState(state: MaxState) = activity.runOnUiThread { if (this@MaxController.state != state) this@MaxController.state = state }
             override fun onLevel(level: Float) = activity.runOnUiThread { micLevel = level }
-            override fun onUserText(text: String) = activity.runOnUiThread { addMessage(fromUser = true, text = text) }
-            override fun onMaxText(text: String) = activity.runOnUiThread { addMessage(fromUser = false, text = text) }
+            override fun onUserText(text: String) {
+                remember("User: $text")
+                activity.runOnUiThread { addMessage(fromUser = true, text = text) }
+            }
+            override fun onMaxText(text: String) {
+                remember("Max: $text")
+                activity.runOnUiThread { addMessage(fromUser = false, text = text) }
+            }
+            override fun onAction(summary: String) = remember("Max ne kiya: $summary")
         })
         // "Hello Max" par turant apni (saved) aawaz mein "Haan ji, boliye" — Google se judne ke 3-5 sec ka sannata nahi.
         val localGreeting = command == null && firstInstruction == null
@@ -578,6 +587,7 @@ class MaxController(
 
     private fun profileJson(): JSONObject =
         profiles.load().toServerJson()
+            .put("recentContext", JSONArray(recentContext()))
             .put("musicApps", JSONArray(actions.installedMusicApps()))
             .apply { settings.musicApp.takeIf { it.isNotBlank() }?.let { put("musicApp", it) } }
 
@@ -642,6 +652,32 @@ class MaxController(
     private val voiceCacheDir = File(activity.cacheDir, "voice").apply { mkdirs() }
 
     private companion object {
+        // ---- Live mode ki chhoti yaad: har "Hello Max"/"Max" naya session hota hai, isliye "doosra chalao" par Max
+        // ko pata hi nahi tha kya chal raha tha (Radha Rani bhajan ke baad English pop gaana chala diya). ----
+        private const val MEMORY_MS = 15 * 60 * 1000L
+        private val recent = ArrayDeque<Pair<Long, String>>()
+
+        fun remember(line: String) = synchronized(recent) {
+            recent.addLast(System.currentTimeMillis() to line.take(300))
+            while (recent.size > 14) recent.removeFirst()
+        }
+
+        fun recentContext(): List<String> = synchronized(recent) {
+            val cutoff = System.currentTimeMillis() - MEMORY_MS
+            recent.filter { it.first >= cutoff }.map { it.second }
+        }
+
+        private var sessionIdShared: String? = null
+        private var sessionUsedAt = 0L
+
+        fun sharedSessionId(): String = synchronized(recent) {
+            val now = System.currentTimeMillis()
+            val id = sessionIdShared?.takeIf { now - sessionUsedAt < MEMORY_MS } ?: UUID.randomUUID().toString()
+            sessionIdShared = id
+            sessionUsedAt = now
+            id
+        }
+
         const val COMMAND_VOICE_CHECK = false
         const val ECHO_SETTLE_MS = 600L
         const val NATURAL_VOICE_COOLDOWN_MS = 5 * 60 * 1000L

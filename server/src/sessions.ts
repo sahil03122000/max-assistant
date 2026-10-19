@@ -29,6 +29,8 @@ export interface UserProfile {
   musicApps?: string[];
   /** Gaane kahan sunte hain (phone yaad rakhta hai — aakhri baar jahan chalaya). */
   musicApp?: string;
+  /** Live mode: pichhle ~15 min ki baat-cheet (har "Hello Max" naya session hai, ye yaad aage le jaati hai). */
+  recentContext?: string[];
 }
 
 export interface Session {

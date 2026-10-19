@@ -54,6 +54,8 @@ class LiveSession(
         fun onLevel(level: Float)
         fun onUserText(text: String)
         fun onMaxText(text: String)
+        /** Phone par koi kaam hua (jaise "YouTube par 'Radha Rani Bhajan' chalega") — agli baat-cheet ki yaad ke liye. */
+        fun onAction(summary: String) {}
     }
 
     /** Session khatam hone ke baad kholne wali screens (call, YouTube...) — jaise purane flow mein. */
@@ -311,6 +313,7 @@ class LiveSession(
                 val fullArgs = if (name == "play_on_youtube") api.liveTool(name, args).optJSONObject("args") ?: args else args
                 val outcome = actions.run(MaxApi.Action("live-${SystemClock.elapsedRealtime()}", name, fullArgs))
                 DebugLog.i("📱 $name $fullArgs → ${if (outcome.ok) "ok" else "FAIL: ${outcome.error}"}")
+                if (outcome.ok) outcome.result?.let { listener.onAction(it.take(160)) }
                 val launch = outcome.launch
                 if (launch != null && name == "open_app") {
                     // App kholna baat-cheet khatam nahi karta — app khol do, Max sunta rahe aur poochhe "isme kya karna hai?"

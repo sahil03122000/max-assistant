@@ -49,6 +49,7 @@ const ProfileBody = z.object({
   birthdayToday: z.boolean().optional(),
   musicApps: z.array(z.string().trim().max(40)).max(10).optional(),
   musicApp: z.string().trim().max(40).optional(),
+  recentContext: z.array(z.string().max(400)).max(20).optional(),
 });
 
 const ChatBody = z.object({

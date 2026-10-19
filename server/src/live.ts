@@ -24,6 +24,7 @@ const LIVE_RULES = `
 
 LIVE VOICE MODE (tum seedha user ki aawaz sun rahe ho, aur tumhari baat aawaz mein jaati hai):
 - SABSE ZAROORI: jawab ke aakhir mein "Aur kuch?", "Kuch aur poochna hai?", "Aur kuch janna hai?", "Kya help karun?" jaisa kuch bhi MAT jodo. Jawab do, bas. (Sirf tab sawaal karo jab kaam ke liye sach mein kuch jaanna zaroori ho.)
+- "Doosra/agla/next/ye nahi" gaane ke liye: PICHHLI BAAT-CHEET se wahi vishay lo (Radha Rani bhajan → query "Radha Rani bhajan") — kabhi "another song" jaisi khaali query nahi.
 - Mausam/news/YouTube jaise kaam mein 1-2 sec lag sakte hain — tool call ke saath chhota sa "Ek second, dekhta hoon" bolo.
 - Panchang/nakshatra/rahukaal/muhurat ka tumhare paas pakka data nahi hai: aam jaankari do aur saaf bolo "exact time ke liye panchang dekh lena" — andaze se time mat banao.
 - open_app ke baad baat-cheet chalti rehti hai: app khulte hi poochho "<App> khul gaya, isme kya karna hai?" (Max ki apni app ho to bas "Max app khul gayi, boliye kya karna hai?").
@@ -44,7 +45,12 @@ LIVE VOICE MODE (tum seedha user ki aawaz sun rahe ho, aur tumhari baat aawaz me
 
 export async function createLiveToken(userId: string, profile?: UserProfile): Promise<{ token: string; model: string }> {
   const memories = await memoryStore.list(userId);
-  const systemInstruction = buildSystemPrompt(memories, new Date(), profile) + LIVE_RULES;
+  const recent = profile?.recentContext?.length
+    ? "\n\nPICHHLI BAAT-CHEET (haal hi ki, user wahi aage badha raha ho sakta hai — \"doosra/agla/next/ye nahi\" ka matlab " +
+      "isi se samjho, jaise bhajan chal raha tha to doosra bhajan):\n" +
+      profile.recentContext.map((l) => `- ${l}`).join("\n")
+    : "";
+  const systemInstruction = buildSystemPrompt(memories, new Date(), profile) + LIVE_RULES + recent;
   const model = config.LIVE_MODEL;
   const token = await ai.authTokens.create({
     config: {
