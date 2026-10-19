@@ -283,7 +283,12 @@ const SERVER_TOOLS: FunctionDeclaration[] = [
   },
 ];
 
-export const ALL_TOOLS = [...DEVICE_TOOLS, ...SERVER_TOOLS];
+// Band: "call karke khud baat" (speaker jugaad) — phone ki call ka echo-canceller speaker ki aawaz kaat deta hai, saamne
+// wale tak Max ki aawaz jaati hi nahi, aur Live mode mein call ki baatein sun ke baar-baar call laga deta tha.
+// Code (CallTalker) rakha hai — cloud phone number (Twilio/Exotel) wale tareeke ke liye kaam aayega.
+const DISABLED_TOOLS = new Set(["call_and_talk"]);
+
+export const ALL_TOOLS = [...DEVICE_TOOLS, ...SERVER_TOOLS].filter((t) => !DISABLED_TOOLS.has(t.name ?? ""));
 const deviceToolNames = new Set(DEVICE_TOOLS.map((t) => t.name));
 
 export function isDeviceTool(name: string): boolean {

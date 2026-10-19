@@ -77,6 +77,8 @@ class LiveSession(
     /** "Hello Max" ke saath koi kaam nahi bola — Max pehle "Haan ji, boliye" jaisa chhota jawab de (purane jaisa). */
     private var greetOnStart = false
     private var greeting = "Haan ji, boliye"
+    /** Koi kaam (WhatsApp, call...) chal raha hai — tab mic ki aawaz Google ko mat bhejo (app/call ki aawaz hukm ban jaati thi). */
+    @Volatile private var toolRunning = false
     @Volatile private var messages = 0
     @Volatile private var sentChunks = 0
     @Volatile private var micPeakDb = -100.0
@@ -244,6 +246,7 @@ class LiveSession(
             msg.optJSONObject("toolCall")?.optJSONArray("functionCalls")?.let { calls ->
                 flushUser(userText).also { userText = StringBuilder() }
                 val responses = JSONArray()
+                toolRunning = true
                 for (i in 0 until calls.length()) {
                     val call = calls.getJSONObject(i)
                     val name = call.optString("name")
@@ -256,6 +259,7 @@ class LiveSession(
                             .put("response", runTool(name, call.optJSONObject("args") ?: JSONObject())),
                     )
                 }
+                toolRunning = false
                 send(JSONObject().put("toolResponse", JSONObject().put("functionResponses", responses)))
                 lastActivityAt = SystemClock.elapsedRealtime()
             }
@@ -351,6 +355,7 @@ class LiveSession(
                     }
                     while (pending.isNotEmpty()) sendAudio(pending.removeFirst())
                     if (halfDuplex && isPlaying()) continue
+                    if (toolRunning) continue
                     sendAudio(chunk)
                 }
             } finally {
