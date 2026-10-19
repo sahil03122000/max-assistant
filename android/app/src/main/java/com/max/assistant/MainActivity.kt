@@ -15,6 +15,30 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import com.max.assistant.ui.theme.MaxAmber
+import com.max.assistant.ui.theme.MaxCyan
+import com.max.assistant.ui.theme.MaxGreen
+import com.max.assistant.ui.theme.MaxIndigo
+import com.max.assistant.ui.theme.MaxLine
+import com.max.assistant.ui.theme.MaxSurface
+import com.max.assistant.ui.theme.MaxSurfaceHigh
+import com.max.assistant.ui.theme.MaxText
+import com.max.assistant.ui.theme.MaxTextDim
+import com.max.assistant.ui.theme.MaxViolet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -155,7 +179,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, History, Log, Profile, Welcome }
+private enum class Screen { Chat, History, Log, Profile, Welcome, Settings }
 
 @Composable
 private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> Unit) {
@@ -163,7 +187,6 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
     var screen by remember {
         mutableStateOf(if (controller.profiles.load().isEmpty) Screen.Welcome else Screen.Chat)
     }
-    var showSettings by remember { mutableStateOf(false) }
 
     // Max sun/soch/bol raha ho tab screen band na ho; baat khatam to phone ka normal timeout.
     val view = LocalView.current
@@ -176,51 +199,130 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
             return
         }
         Screen.Log -> {
-            LogScreen(onClose = { screen = Screen.Chat })
+            LogScreen(onClose = { screen = Screen.Settings })
             return
         }
         Screen.History -> {
             HistoryScreen(controller.history, onClose = { screen = Screen.Chat })
             return
         }
+        Screen.Settings -> {
+            SettingsScreen(
+                controller.settings,
+                onPreviewVoice = controller::previewVoice,
+                onPreviewPhoneVoice = controller::previewPhoneVoice,
+                onWakeWordChange = onWakeWordChange,
+                onOpenLog = { screen = Screen.Log },
+                onClose = { screen = Screen.Chat },
+            )
+            return
+        }
         Screen.Chat -> Unit
     }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+    val name = remember(screen) { controller.profiles.load().displayName }
+    val chatting = controller.messages.isNotEmpty() || controller.state == MaxState.Thinking
+    MaxBackground {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .systemBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("Max", style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = { screen = Screen.Profile }) { Text("👤") }
-                TextButton(onClick = { screen = Screen.History }) { Text("History") }
-                TextButton(onClick = { screen = Screen.Log }) { Text("Log") }
-                TextButton(onClick = { showSettings = true }) { Text("Settings") }
+            // Upar: naam + abhi kya ho raha hai; daayein history / settings / profile.
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Max", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaxText)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (controller.state == MaxState.Idle) MaxGreen else MaxCyan),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (controller.state == MaxState.Idle) "Taiyaar" else stateLabel(controller.state),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaxTextDim,
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RoundIcon("🕘", { screen = Screen.History })
+                    RoundIcon("⚙", { screen = Screen.Settings })
+                    RoundIcon(name.firstOrNull()?.uppercase() ?: "👤", { screen = Screen.Profile }, highlighted = true)
+                }
             }
 
-            ChatList(controller.messages, thinking = controller.state == MaxState.Thinking, Modifier.weight(1f))
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (!chatting) {
+                    EmptyState(name, controller.state, controller.micLevel, controller::onMicTap, controller::onTextSubmit)
+                } else {
+                    ChatList(controller.messages, thinking = controller.state == MaxState.Thinking, Modifier.fillMaxSize())
+                }
+            }
 
-            StatusLine(controller.state, controller.partialText)
+            // Baat-cheet chal rahi ho to neeche chhota gola + kya ho raha hai.
+            if (chatting) {
+                Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    MaxOrb(controller.state, controller.micLevel, 76.dp, controller::onMicTap)
+                    Text(
+                        controller.partialText.ifBlank { stateLabel(controller.state) },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaxTextDim,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
 
-            MicButton(controller.state, onClick = controller::onMicTap)
-
-            TextInput(onSend = controller::onTextSubmit)
+            InputBar(onSend = controller::onTextSubmit)
         }
     }
+}
 
-    if (showSettings) {
-        SettingsDialog(
-            controller.settings,
-            onPreviewVoice = controller::previewVoice,
-            onPreviewPhoneVoice = controller::previewPhoneVoice,
-            onWakeWordChange = onWakeWordChange,
-            onDismiss = { showSettings = false },
+/** Pehli screen: bada gola, namaste, aur tap karne layak sujhav. */
+@Composable
+private fun EmptyState(name: String, state: MaxState, level: Float, onOrb: () -> Unit, onSuggestion: (String) -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        MaxOrb(state, level, 170.dp, onOrb)
+        Spacer(Modifier.size(18.dp))
+        Text(
+            if (name.isNotBlank()) "Namaste, $name 👋" else "Namaste 👋",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaxText,
         )
+        Text(stateLabel(state), style = MaterialTheme.typography.bodyMedium, color = MaxTextDim, modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.size(24.dp))
+        listOf(
+            "☀️" to "Aaj ka mausam kaisa hai",
+            "🎵" to "Koi achha gaana chalao",
+            "📰" to "Aaj ki khabrein batao",
+            "⏰" to "Kal subah 7 baje ka alarm lagao",
+        ).forEach { (icon, text) ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaxSurface)
+                    .border(1.dp, MaxLine, RoundedCornerShape(16.dp))
+                    .clickable { onSuggestion(text) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(icon, fontSize = 18.sp)
+                Spacer(Modifier.width(12.dp))
+                Text(text, style = MaterialTheme.typography.bodyMedium, color = MaxText)
+            }
+        }
     }
 }
 
@@ -231,17 +333,12 @@ private fun ChatList(messages: List<ChatMessage>, thinking: Boolean, modifier: M
     LaunchedEffect(itemCount) {
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
-    if (messages.isEmpty() && !thinking) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(
-                "Mic dabao aur bolo:\n\"Papa ko call karo\"\n\"Kal subah 7 baje ka alarm lagao\"",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        return
-    }
-    LazyColumn(modifier.fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+        modifier,
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 12.dp),
+    ) {
         items(messages) { message -> Bubble(message.text, message.fromUser) }
         if (thinking) item { ThinkingBubble() }
     }
@@ -249,43 +346,48 @@ private fun ChatList(messages: List<ChatMessage>, thinking: Boolean, modifier: M
 
 @Composable
 private fun Bubble(text: String, fromUser: Boolean, highlight: String = "") {
-    val highlightColor = MaterialTheme.colorScheme.tertiaryContainer
     // Search kiya hua shabd message mein highlight karo.
-    val content = remember(text, highlight, highlightColor) {
+    val content = remember(text, highlight) {
         buildAnnotatedString {
             append(text)
             if (highlight.isNotEmpty()) {
                 var start = text.indexOf(highlight, ignoreCase = true)
                 while (start >= 0) {
-                    addStyle(
-                        SpanStyle(background = highlightColor, fontWeight = FontWeight.Bold),
-                        start, start + highlight.length,
-                    )
+                    addStyle(SpanStyle(background = MaxAmber.copy(alpha = 0.35f), fontWeight = FontWeight.Bold), start, start + highlight.length)
                     start = text.indexOf(highlight, start + highlight.length, ignoreCase = true)
                 }
             }
         }
     }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
-    ) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start) {
+        if (!fromUser) {
+            Box(
+                Modifier
+                    .padding(end = 8.dp, top = 2.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(MaxViolet, MaxCyan))),
+                contentAlignment = Alignment.Center,
+            ) { Text("M", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+        }
+        val shape = if (fromUser) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(6.dp, 20.dp, 20.dp, 20.dp)
         Text(
             content,
             modifier = Modifier
-                .widthIn(max = 300.dp)
-                .background(
-                    if (fromUser) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(16.dp),
+                .widthIn(max = 290.dp)
+                .clip(shape)
+                .then(
+                    if (fromUser) Modifier.background(Brush.linearGradient(listOf(MaxViolet, MaxIndigo)))
+                    else Modifier.background(MaxSurfaceHigh).border(1.dp, MaxLine, shape),
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodyLarge,
+            color = if (fromUser) Color.White else MaxText,
         )
     }
 }
 
-/** Max soch raha hai: "." → ".." → "..." chalta rehta hai jab tak jawab bolna shuru na ho. */
+/** Max soch raha hai: bindu chalte rehte hain jab tak jawab bolna shuru na ho. */
 @Composable
 private fun ThinkingBubble() {
     var dots by remember { mutableIntStateOf(1) }
@@ -296,78 +398,67 @@ private fun ThinkingBubble() {
         }
     }
     // Width fix rakho taaki dots badalne par bubble hile nahi.
-    Bubble(".".repeat(dots).padEnd(3, ' '), fromUser = false)
+    Bubble("●".repeat(dots).padEnd(3, ' '), fromUser = false)
 }
 
+/** Neeche likhne ki jagah — gol "pill" jaisa, daayein bhejne ka button. */
 @Composable
-private fun StatusLine(state: MaxState, partial: String) {
-    val text = when (state) {
-        MaxState.Idle -> ""
-        MaxState.Listening -> partial.ifBlank { "Sun raha hoon..." }
-        MaxState.Thinking -> ""
-        MaxState.Speaking -> "Bol raha hoon..."
-    }
-    Text(
-        text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
-private fun MicButton(state: MaxState, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Button(
-            onClick = onClick,
-            shape = CircleShape,
-            modifier = Modifier.size(88.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (state == MaxState.Idle) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.error,
-            ),
-        ) {
-            Text(if (state == MaxState.Idle) "🎙" else "■", fontSize = 32.sp)
+private fun InputBar(onSend: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    val send = {
+        if (text.isNotBlank()) {
+            onSend(text)
+            text = ""
         }
     }
-}
-
-@Composable
-private fun TextInput(onSend: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(top = 8.dp, bottom = 10.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaxSurfaceHigh)
+            .border(1.dp, MaxLine, RoundedCornerShape(28.dp))
+            .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            placeholder = { Text("Ya yahan likho...") },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            onClick = {
-                onSend(text)
-                text = ""
-            },
-            enabled = text.isNotBlank(),
-        ) { Text("Bhejo") }
+        Box(Modifier.weight(1f)) {
+            if (text.isEmpty()) Text("Max se likh ke poochho...", color = MaxTextDim, style = MaterialTheme.typography.bodyLarge)
+            BasicTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaxText),
+                cursorBrush = SolidColor(MaxCyan),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { send() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Box(
+            Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(
+                    if (text.isNotBlank()) Brush.linearGradient(listOf(MaxViolet, MaxCyan))
+                    else SolidColor(MaxLine),
+                )
+                .clickable(enabled = text.isNotBlank()) { send() },
+            contentAlignment = Alignment.Center,
+        ) { Text("➤", color = Color.White, fontSize = 16.sp) }
     }
 }
 
+/** Poori screen ki Settings — alag-alag card sections, har badlaav turant save. */
 @Composable
-private fun SettingsDialog(
+private fun SettingsScreen(
     settings: Settings,
     onPreviewVoice: (String) -> Unit,
     onPreviewPhoneVoice: (String) -> Unit,
     onWakeWordChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
+    onOpenLog: () -> Unit,
+    onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     var url by remember { mutableStateOf(settings.serverUrl) }
     var language by remember { mutableStateOf(settings.language) }
     var voice by remember { mutableStateOf(settings.voice) }
@@ -375,175 +466,154 @@ private fun SettingsDialog(
     var wakeWord by remember { mutableStateOf(settings.wakeWord) }
     var activeStyle by remember { mutableStateOf(settings.activeStyle) }
     var listenEngine by remember { mutableStateOf(settings.listenEngine) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Settings") },
-        text = {
+    var moreVoices by remember { mutableStateOf(false) }
+    val close = {
+        if (url.isNotBlank() && url != settings.serverUrl) settings.serverUrl = url
+        onClose()
+    }
+    BackHandler(onBack = close)
+
+    MaxBackground {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp),
+        ) {
+            MaxTopBar("Settings", onBack = close)
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        Text("\"Hello Max\" bol kar jagao", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Max background mein sunta rahega",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                SectionCard("Jagana") {
+                    SettingRow("\"Hello Max\" bol kar jagao", "Max background mein sunta rahega") {
+                        Switch(checked = wakeWord, onCheckedChange = {
+                            wakeWord = it
+                            onWakeWordChange(it)
+                        })
                     }
-                    Switch(checked = wakeWord, onCheckedChange = { wakeWord = it })
-                }
-                val context = LocalContext.current
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        Text("📱 Phone control", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            if (MaxAccessibilityService.isEnabled) "ON — Max khud tap/click kar sakta hai"
-                            else "OFF — selfie mein khud click, apps chalana iske liye",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    TextButton(onClick = {
-                        Toast.makeText(context, "Installed apps → Max — phone control → ON", Toast.LENGTH_LONG).show()
-                        context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
-                }
-                VoiceIdRow()
-                WhatsAppRepliesRow()
-                UpdateRow()
-                Text("\"Hello Max\" par kya dikhe", style = MaterialTheme.typography.labelLarge)
-                listOf(
-                    Settings.STYLE_LIGHT to "🌈 Sirf screen ke kinaron par RGB light",
-                    Settings.STYLE_PANEL to "Neeche panel (text + buttons)",
-                ).forEach { (id, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = activeStyle == id, onClick = { activeStyle = id }),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = activeStyle == id, onClick = { activeStyle = id })
-                        Text(label)
+                    Text("Jaagne par kya dikhe", style = MaterialTheme.typography.labelLarge, color = MaxTextDim, modifier = Modifier.padding(top = 4.dp))
+                    listOf(
+                        Settings.STYLE_LIGHT to "🌈 Sirf screen ke kinaron par roshni",
+                        Settings.STYLE_PANEL to "Neeche panel (text + buttons)",
+                    ).forEach { (id, label) ->
+                        ChoiceRow(label, activeStyle == id) {
+                            activeStyle = id
+                            settings.activeStyle = id
+                        }
                     }
                 }
-                Text("Max ki aawaz (naam par tap = sunao)", style = MaterialTheme.typography.labelLarge)
-                Settings.VOICES.forEach { (id, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = voice == id, onClick = {
-                                voice = id
-                                onPreviewVoice(id)
-                            }),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = voice == id, onClick = {
+
+                SectionCard("Baat-cheet") {
+                    Text("Sunne ka tareeka", style = MaterialTheme.typography.labelLarge, color = MaxTextDim)
+                    listOf(
+                        Settings.ENGINE_LIVE to "🆕 Live — ChatGPT jaisa, seedha aawaz samajhta hai",
+                        Settings.ENGINE_WHISPER to "Whisper — purana tareeka (server likhta hai)",
+                        Settings.ENGINE_GOOGLE to "Google — phone ka apna (Hinglish mein kamzor)",
+                    ).forEach { (id, label) ->
+                        ChoiceRow(label, listenEngine == id) {
+                            listenEngine = id
+                            settings.listenEngine = id
+                        }
+                    }
+                    if (listenEngine == Settings.ENGINE_GOOGLE) {
+                        Text("Google ki bhasha", style = MaterialTheme.typography.labelLarge, color = MaxTextDim, modifier = Modifier.padding(top = 6.dp))
+                        listOf("hi-IN" to "Hindi / Hinglish (recommended)", "en-IN" to "English").forEach { (tag, label) ->
+                            ChoiceRow(label, language == tag) {
+                                language = tag
+                                settings.language = tag
+                            }
+                        }
+                    }
+                    Text("Max ki aawaz (tap = sunao)", style = MaterialTheme.typography.labelLarge, color = MaxTextDim, modifier = Modifier.padding(top = 6.dp))
+                    Settings.VOICES.forEach { (id, label) ->
+                        ChoiceRow(label, voice == id) {
                             voice = id
+                            settings.voice = id
                             onPreviewVoice(id)
-                        })
-                        Text(label)
+                        }
                     }
-                }
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Server address") },
-                    singleLine = true,
-                )
-                Text("Backup aawaz — jab natural aawaz na mile (tap = sunao)", style = MaterialTheme.typography.labelLarge)
-                Settings.PHONE_VOICES.forEach { (id, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = phoneVoice == id, onClick = {
+                    TextButton(onClick = { moreVoices = !moreVoices }) {
+                        Text(if (moreVoices) "Backup aawazein chhupao" else "Backup aawazein dikhao", color = MaxCyan)
+                    }
+                    if (moreVoices) {
+                        Settings.PHONE_VOICES.forEach { (id, label) ->
+                            ChoiceRow(label, phoneVoice == id) {
                                 phoneVoice = id
+                                settings.phoneVoice = id
                                 onPreviewPhoneVoice(id)
-                            }),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = phoneVoice == id, onClick = {
-                            phoneVoice = id
-                            onPreviewPhoneVoice(id)
-                        })
-                        Text(label)
+                            }
+                        }
                     }
                 }
-                Text("Sunne ka tareeka", style = MaterialTheme.typography.labelLarge)
-                listOf(
-                    Settings.ENGINE_LIVE to "🆕 Live (trial) — ChatGPT voice jaisa: seedha aawaz samajhta hai, beech mein bol sakte ho",
-                    Settings.ENGINE_WHISPER to "Whisper — Hinglish sahi likhta hai (recommended, server chahiye)",
-                    Settings.ENGINE_GOOGLE to "Google — phone ka apna (Hinglish mein kamzor)",
-                ).forEach { (id, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = listenEngine == id, onClick = { listenEngine = id }),
-                        verticalAlignment = Alignment.CenterVertically,
+
+                SectionCard("Ijazat aur suraksha") {
+                    SettingRow(
+                        "📱 Phone control",
+                        if (MaxAccessibilityService.isEnabled) "ON — Max khud tap/click kar sakta hai" else "OFF — WhatsApp, selfie, apps ke liye zaroori",
                     ) {
-                        RadioButton(selected = listenEngine == id, onClick = { listenEngine = id })
-                        Text(label)
+                        TextButton(onClick = {
+                            Toast.makeText(context, "Installed apps → Max — phone control → ON", Toast.LENGTH_LONG).show()
+                            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
                     }
+                    VoiceIdRow()
+                    WhatsAppRepliesRow()
                 }
-                Text("Sunne ki bhasha (sirf Google ke liye)", style = MaterialTheme.typography.labelLarge)
-                listOf(
-                    "hi-IN" to "Hindi / Hinglish — sabse sahi sunta hai, likhai Roman mein (recommended)",
-                    "en-IN" to "English — Hindi shabd (haan, nahi) kam samajhta hai",
-                ).forEach { (tag, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = language == tag, onClick = { language = tag }),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = language == tag, onClick = { language = tag })
-                        Text(label)
+
+                SectionCard("App") {
+                    UpdateRow()
+                    SettingRow("🧾 Debug log", "Gadbad ho to yahan se logs bhejo") {
+                        TextButton(onClick = onOpenLog) { Text("Kholo") }
                     }
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text("Server address") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    )
+                    Text(
+                        "Max v${BuildConfig.VERSION_CODE}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaxTextDim,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                settings.serverUrl = url
-                settings.language = language
-                settings.voice = voice
-                settings.activeStyle = activeStyle
-                settings.listenEngine = listenEngine
-                settings.phoneVoice = phoneVoice
-                if (wakeWord != settings.wakeWord) onWakeWordChange(wakeWord)
-                onDismiss()
-            }) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 }
 
 @Composable
 private fun LogScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     BackHandler(onBack = onClose)
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+    MaxBackground {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .systemBarsPadding()
                 .padding(horizontal = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("Debug log", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = {
+            MaxTopBar("Debug log", onBack = onClose) {
+                RoundIcon("⧉", {
                     val clipboard = context.getSystemService(ClipboardManager::class.java)
                     clipboard.setPrimaryClip(ClipData.newPlainText("Max log", DebugLog.lines.joinToString("\n")))
                     Toast.makeText(context, "Log copy ho gaya", Toast.LENGTH_SHORT).show()
-                }) { Text("Copy") }
-                SendLogsButton()
-                TextButton(onClick = onClose) { Text("Close") }
+                })
             }
-            LazyColumn(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { SendLogsButton() }
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaxSurface)
+                    .padding(10.dp),
+            ) {
                 items(DebugLog.lines) { line ->
-                    Text(line, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(vertical = 2.dp))
+                    Text(line, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = MaxTextDim, modifier = Modifier.padding(vertical = 2.dp))
                 }
             }
         }
@@ -558,23 +628,21 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
     var query by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { entries = store.load() }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+    MaxBackground {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .systemBarsPadding()
+                .imePadding()
                 .padding(horizontal = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("History", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onClose) { Text("Close") }
-            }
+            MaxTopBar("History", onBack = onClose)
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text("🔍 History mein dhundho...") },
                 singleLine = true,
+                shape = RoundedCornerShape(24.dp),
                 trailingIcon = {
                     if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("✕") }
                 },
@@ -591,15 +659,12 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                 Text(
                     if (shown.isEmpty()) "\"$search\" kahin nahi mila" else "${shown.size} message mile",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaxTextDim,
                 )
             }
             when {
-                shown == null -> Text("Load ho raha hai...")
-                list.isNullOrEmpty() -> Text(
-                    "Abhi tak koi baat-cheet nahi hui",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                shown == null -> Text("Load ho raha hai...", color = MaxTextDim)
+                list.isNullOrEmpty() -> Text("Abhi tak koi baat-cheet nahi hui", color = MaxTextDim, modifier = Modifier.padding(top = 24.dp))
                 shown.isEmpty() -> Unit
                 else -> {
                     val zone = ZoneId.systemDefault()
@@ -613,7 +678,8 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                                 Text(
                                     dayLabel(day),
                                     style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaxViolet,
+                                    fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
                                 )
                             }
@@ -622,7 +688,7 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                                     Text(
                                         TIME_FORMAT.format(Instant.ofEpochMilli(entry.timestamp).atZone(zone)),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = MaxTextDim,
                                     )
                                     Bubble(entry.text, entry.fromUser, highlight = search)
                                 }
