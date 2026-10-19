@@ -411,6 +411,7 @@ private fun SettingsDialog(
                     }) { Text(if (MaxAccessibilityService.isEnabled) "Settings" else "Chalu karo") }
                 }
                 VoiceIdRow()
+                WhatsAppRepliesRow()
                 UpdateRow()
                 Text("\"Hello Max\" par kya dikhe", style = MaterialTheme.typography.labelLarge)
                 listOf(

@@ -103,6 +103,29 @@ class WakeWordService : Service() {
         private var pendingCommand: Pair<ByteArray, Long>? = null
 
         /** Wake word ke saath bola gaya kaam (pichhle ~10 sec ka), ek hi baar milta hai. */
+        /** WhatsApp jawab jo Max ko bolna hai (chat, messages). */
+        @Volatile private var pendingAnnouncement: Pair<String, List<String>>? = null
+
+        fun takePendingAnnouncement(): Pair<String, List<String>>? = pendingAnnouncement.also { pendingAnnouncement = null }
+
+        /**
+         * Jinhe Max ne message kiya tha unka jawab aaya — Max khud jaag ke bataye. Call chal rahi ho ya Max abhi baat
+         * kar raha ho to thodi der baad (har 15 sec, 10 min tak).
+         */
+        fun announceWhatsApp(context: Context, chat: String, messages: List<String>, tries: Int = 0) {
+            val service = instance
+            if (service == null) {
+                DebugLog.i("🔔 Jawab aaya par 'Hello Max' service band hai — bata nahi sakta")
+                return
+            }
+            if (service.inCall() || isHeld) {
+                if (tries < 40) service.main.postDelayed({ announceWhatsApp(context, chat, messages, tries + 1) }, 15_000)
+                return
+            }
+            pendingAnnouncement = chat to messages
+            service.onWake(quick = false, command = null)
+        }
+
         fun takePendingCommand(): ByteArray? {
             val (wav, at) = pendingCommand ?: return null
             pendingCommand = null

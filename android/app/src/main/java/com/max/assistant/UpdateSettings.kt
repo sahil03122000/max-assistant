@@ -120,6 +120,28 @@ private fun UpdateDialog(onClose: () -> Unit) {
     )
 }
 
+/** Settings ki line: "🔔 WhatsApp jawab sunao" — Notification access ki ijazat. */
+@Composable
+fun WhatsAppRepliesRow() {
+    val context = LocalContext.current
+    val enabled = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+            Text("🔔 WhatsApp jawab sunao", style = MaterialTheme.typography.labelLarge)
+            Text(
+                if (enabled) "ON — Max jinhe message karta hai, unka jawab aate hi batata hai"
+                else "OFF — 'pooch ke batao' ke liye ON karo",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = {
+            Toast.makeText(context, "Max — WhatsApp jawab → ON → Allow", Toast.LENGTH_LONG).show()
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }) { Text(if (enabled) "Settings" else "Chalu karo") }
+    }
+}
+
 /** Log screen ka "📤 Bhejo" button. */
 @Composable
 fun SendLogsButton() {

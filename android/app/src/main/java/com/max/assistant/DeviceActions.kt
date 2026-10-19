@@ -163,6 +163,7 @@ class DeviceActions(
         }
         lastSentKey = key
         lastSentAt = now
+        WhatsAppWatch.add(context, chat)
         return Outcome(
             true,
             result = "Message sach mein bhej diya gaya ($chat). Chat abhi khuli hai — user ko 'Bhej diya. $chat ko aur kuch bhejun?' bolo; " +

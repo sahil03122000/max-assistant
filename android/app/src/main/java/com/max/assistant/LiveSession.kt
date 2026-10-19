@@ -77,6 +77,8 @@ class LiveSession(
     /** "Hello Max" ke saath koi kaam nahi bola — Max pehle "Haan ji, boliye" jaisa chhota jawab de (purane jaisa). */
     private var greetOnStart = false
     private var greeting = "Haan ji, boliye"
+    /** Greeting ki jagah pehli baat (jaise WhatsApp jawab sunana). */
+    private var firstInstruction: String? = null
     /** Koi kaam (WhatsApp, call...) chal raha hai — tab mic ki aawaz Google ko mat bhejo (app/call ki aawaz hukm ban jaati thi). */
     @Volatile private var toolRunning = false
     @Volatile private var messages = 0
@@ -87,8 +89,9 @@ class LiveSession(
     /** User ne "Max stop"/"bye" bola — Max so jaaye. */
     @Volatile private var stopped = false
 
-    suspend fun run(profile: JSONObject, firstPcm: ShortArray?): Result = coroutineScope {
+    suspend fun run(profile: JSONObject, firstPcm: ShortArray?, firstInstruction: String? = null): Result = coroutineScope {
         greetOnStart = firstPcm == null
+        this@LiveSession.firstInstruction = firstInstruction
         // Har baar thodi alag, chhoti line — "kaise ho" har baar sunna irritate karta tha.
         val name = profile.optString("callingName").trim()
         greeting = (if (name.isNotEmpty()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
@@ -193,7 +196,7 @@ class LiveSession(
                                         JSONArray().put(
                                             JSONObject().put(
                                                 "text",
-                                                "[User ne abhi 'Hello Max' bola. Bilkul yahi line bolo, ek shabd bhi zyada nahi " +
+                                                firstInstruction ?: "[User ne abhi 'Hello Max' bola. Bilkul yahi line bolo, ek shabd bhi zyada nahi " +
                                                     "(\"kaise ho\" ya koi sawaal nahi, koi tool nahi): \"$greeting\"]",
                                             ),
                                         ),

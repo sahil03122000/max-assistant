@@ -84,11 +84,26 @@ class MaxController(
 
     private fun isLive() = settings.listenEngine == Settings.ENGINE_LIVE
 
+    /** WhatsApp par jawab aaya — Max bataye aur poochhe reply karna hai? (OTP/card jaisi cheezein pehle chhupa do.) */
+    private suspend fun announce(chat: String, messages: List<String>) {
+        val text = PrivacyFilter.apply(messages.joinToString(" | ")).text
+        val note = "[WhatsApp jawab] $chat ne WhatsApp par likha: \"$text\". User ko chhota sa batao kisne kya likha " +
+            "(Roman Hinglish, apne shabdon mein) aur poocho: reply karna hai? Reply bole to $chat ko whatsapp_send karo."
+        if (isLive()) {
+            runLive(null, firstInstruction = note)
+            return
+        }
+        state = MaxState.Thinking
+        val turn = api.chat(sessionId, note, profileJson())
+        say(turn.reply)
+        listenAndHandle(inConversation = true)
+    }
+
     /**
      * Live mode: ek lagatar baat-cheet (ChatGPT voice jaisi) — Whisper/beep/baari-baari nahi. Fail ho to purana tareeka.
      * [command]: "Hello Max" ke saath hi boli gayi baat (WAV).
      */
-    private suspend fun runLive(command: ByteArray?) {
+    private suspend fun runLive(command: ByteArray?, firstInstruction: String? = null) {
         state = MaxState.Listening
         beepNow()
         val session = LiveSession(activity, api, actions, object : LiveSession.Listener {
@@ -98,7 +113,7 @@ class MaxController(
             override fun onMaxText(text: String) = activity.runOnUiThread { addMessage(fromUser = false, text = text) }
         })
         val result = try {
-            session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) })
+            session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) }, firstInstruction)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -123,6 +138,11 @@ class MaxController(
     /** "Hello Max" suna gaya — beep karo aur seedha suno. */
     /** [quick]: conversation mode mein sirf "Max" bola — greeting nahi, seedha beep aur suno. */
     fun onWake(quick: Boolean = false) {
+        val announcement = WakeWordService.takePendingAnnouncement()
+        if (announcement != null) {
+            start { announce(announcement.first, announcement.second) }
+            return
+        }
         val command = WakeWordService.takePendingCommand()
         if (isLive()) {
             start { runLive(command) }
