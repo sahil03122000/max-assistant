@@ -39,7 +39,9 @@ function readable(title: string): boolean {
 // "Bhide Tries To Give Sakharam A Bath | Taarak Mehta Ka Ooltah Chashmah | तारक..." → pehla hissa hi bolo.
 function shortTitle(title: string): string {
   const first = title.split(/\s[|｜]\s/)[0]?.trim() || title;
-  return first.replace(/[ऀ-ॿ]+/g, "").replace(/\s{2,}/g, " ").trim() || first;
+  // Emoji, #hashtag, (All song) jaise tukde bolne mein bekaar.
+  const clean = first.replace(/#\S+/g, "").replace(/\p{Extended_Pictographic}|\u{FE0F}|\u{200D}/gu, "").replace(/\([^)]*\)/g, "");
+  return clean.replace(/[ऀ-ॿ]+/g, "").replace(/\s{2,}/g, " ").trim() || first;
 }
 
 // Page ka data bahut gehra nested JSON hai — har "videoRenderer" dhundh lo, jahan bhi ho.
