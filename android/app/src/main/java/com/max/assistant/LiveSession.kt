@@ -223,9 +223,13 @@ class LiveSession(
                     }
                 }
                 if (content.optBoolean("interrupted")) {
-                    // User Max ke beech bol pada — Max chup (bachi hui aawaz phenko).
-                    DebugLog.i("🌐 Live: beech mein roka")
-                    clearPlayback()
+                    // User Max ke beech bol pada — Max chup (bachi hui aawaz phenko). Par jis phone par Max ke bolte
+                    // waqt mic band hai (halfDuplex), wahan ye "rokna" kisi shor se aata hai aur Max ki baat ka
+                    // shuru kat jaata tha — tab poori baat bajne do.
+                    if (!halfDuplex) {
+                        DebugLog.i("🌐 Live: beech mein roka")
+                        clearPlayback()
+                    }
                 }
                 if (content.optBoolean("turnComplete")) {
                     flushUser(userText).also { userText = StringBuilder() }

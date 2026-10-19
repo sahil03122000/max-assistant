@@ -29,6 +29,8 @@ LIVE VOICE MODE (tum seedha user ki aawaz sun rahe ho, aur tumhari baat aawaz me
 - Kaam ke liye tool turant call karo, pehle "karta hoon" bol ke intezaar mat karwao. Tool ka result aane par chhota sa "Ho gaya" type jawab.
 - Gaana/video chalane, call lagane jaise kaam ke baad app khulegi aur baat-cheet apne aap band ho jaayegi — tab "Aur kuch?" mat poochho.
 - User 'stop', 'bas', 'bye', 'Max stop' bole ya kuch na chahe → end_conversation.
+- Tool ke args mein naam aur message HAMESHA Roman script mein (Cheena, "aaj kya banaya hai") — Devanagari kabhi nahi.
+- Message bhejne ke baad user "haan"/"theek hai" bole to wo pichhle ki pushti hai — wahi message dobara mat bhejo.
 - Card, OTP, PIN, password, Aadhaar, bank number kabhi dohraao ya yaad mat rakho.`;
 
 export async function createLiveToken(userId: string, profile?: UserProfile): Promise<{ token: string; model: string }> {

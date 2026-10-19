@@ -42,8 +42,16 @@ class DeviceActions(
 
     private data class Contact(val name: String, val number: String)
 
+    private companion object {
+        const val DUPLICATE_WINDOW_MS = 60_000L
+        @Volatile var lastSentKey = ""
+        @Volatile var lastSentAt = 0L
+    }
+
     suspend fun run(action: MaxApi.Action): Outcome = try {
-        val args = action.args
+        // Live mode ka AI kabhi naam/message Hindi lipi mein deta hai ("चीना") — WhatsApp/contacts mein Roman mein
+        // save hote hain aur user ko Roman Hinglish hi chahiye. Sab text Roman mein badlo.
+        val args = romanizeArgs(action.args)
         when (action.name) {
             "whatsapp_search" -> whatsAppSearch(args)
             "whatsapp_send" -> whatsAppSend(args)
@@ -123,6 +131,15 @@ class DeviceActions(
         }
     }
 
+    private fun romanizeArgs(args: JSONObject): JSONObject {
+        val out = JSONObject(args.toString())
+        for (key in args.keys()) {
+            val v = out.opt(key)
+            if (v is String) out.put(key, Hinglish.romanize(v))
+        }
+        return out
+    }
+
     private suspend fun whatsAppSend(args: JSONObject): Outcome {
         lockedError()?.let { return it }
         val service = MaxAccessibilityService.instance
@@ -132,11 +149,20 @@ class DeviceActions(
         val chat = args.optString("chat").trim()
         val message = args.optString("message").trim()
         if (chat.isEmpty() || message.isEmpty()) return Outcome(false, error = "Chat ka naam ya message nahi mila")
+        // Wahi message usi chat ko abhi-abhi gaya hai — AI ne "haan" ko dobara confirm samjha tha aur 2 baar chala gaya.
+        val key = "${chat.lowercase()}|${message.lowercase().filter { it.isLetterOrDigit() }}"
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (key == lastSentKey && now - lastSentAt < DUPLICATE_WINDOW_MS) {
+            DebugLog.i("📤 Ye message abhi bheja ja chuka — dobara nahi")
+            return Outcome(true, result = "Ye message pehle hi bhej diya gaya tha — dobara mat bhejo. User ko bolo 'Bhej diya hai.'")
+        }
         try {
             WhatsAppFlow(service).send(pkg!!, chat, message, args.optString("which_whatsapp").ifBlank { Settings(context).whatsAppChoice })
         } catch (e: WhatsAppFlow.ChooserNeeded) {
             return Outcome(false, error = "Phone mein do WhatsApp hain: ${e.options.joinToString()}. User se poocho kaunse se, phir which_whatsapp ke saath dobara.")
         }
+        lastSentKey = key
+        lastSentAt = now
         return Outcome(
             true,
             result = "Message sach mein bhej diya gaya ($chat). Chat abhi khuli hai — user ko 'Bhej diya. $chat ko aur kuch bhejun?' bolo; " +
