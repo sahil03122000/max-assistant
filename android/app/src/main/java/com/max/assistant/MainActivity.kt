@@ -34,6 +34,7 @@ import com.max.assistant.ui.theme.MaxCyan
 import com.max.assistant.ui.theme.MaxGreen
 import com.max.assistant.ui.theme.MaxIndigo
 import com.max.assistant.ui.theme.MaxLine
+import com.max.assistant.ui.theme.MaxPink
 import com.max.assistant.ui.theme.MaxSurface
 import com.max.assistant.ui.theme.MaxSurfaceHigh
 import com.max.assistant.ui.theme.MaxText
@@ -257,6 +258,15 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
                 }
             }
 
+            ListeningCard(
+                mode = MaxStatus.mode,
+                active = controller.state != MaxState.Idle,
+                onPower = { on ->
+                    if (!on) controller.stop() // chalti baat-cheet bhi turant band
+                    onWakeWordChange(on)
+                },
+            )
+
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (!chatting) {
                     EmptyState(name, controller.state, controller.micLevel, controller::onMicTap, controller::onTextSubmit)
@@ -281,6 +291,49 @@ private fun MaxScreen(controller: MaxController, onWakeWordChange: (Boolean) -> 
 
             InputBar(onSend = controller::onTextSubmit)
         }
+    }
+}
+
+/**
+ * Sabse upar: Max abhi kya sun raha hai (saaf shabdon mein) + ek button jo sab kuch band/chalu kare.
+ * App ke andar baat chal rahi ho (likh ke bhi) to wo bhi "sun raha hai / AI ko ja raha hai" dikhe.
+ */
+@Composable
+private fun ListeningCard(mode: MaxStatus.Mode, active: Boolean, onPower: (Boolean) -> Unit) {
+    val shown = if (active) MaxStatus.Mode.ACTIVE else mode
+    val on = mode != MaxStatus.Mode.OFF
+    val color = when (shown) {
+        MaxStatus.Mode.OFF -> MaxTextDim
+        MaxStatus.Mode.WAKE_ONLY -> MaxGreen
+        MaxStatus.Mode.CONVERSATION -> MaxCyan
+        MaxStatus.Mode.ACTIVE -> MaxPink
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaxSurface)
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(MaxStatus.title(shown), style = MaterialTheme.typography.labelLarge, color = MaxText, fontWeight = FontWeight.SemiBold)
+            Text(MaxStatus.detail(shown), style = MaterialTheme.typography.bodySmall, color = MaxTextDim)
+        }
+        Spacer(Modifier.width(8.dp))
+        // Ek button — sab band (mic bhi) / phir se chalu.
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (on) Brush.linearGradient(listOf(MaxViolet, MaxCyan)) else SolidColor(MaxLine))
+                .clickable { onPower(!on) },
+            contentAlignment = Alignment.Center,
+        ) { Text("⏻", fontSize = 20.sp, color = Color.White) }
     }
 }
 

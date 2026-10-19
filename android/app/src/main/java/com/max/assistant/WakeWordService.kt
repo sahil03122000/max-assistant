@@ -76,7 +76,24 @@ class WakeWordService : Service() {
         fun pause(owner: String) {
             synchronized(holds) { holds += owner }
             instance?.pauseListening()
+            refreshStatus()
         }
+
+        /** App/notification par "Max abhi kya sun raha hai" — [MaxStatus]. */
+        fun refreshStatus() {
+            val mode = when {
+                instance == null -> MaxStatus.Mode.OFF
+                isHeld -> MaxStatus.Mode.ACTIVE
+                sessionActive -> MaxStatus.Mode.CONVERSATION
+                else -> MaxStatus.Mode.WAKE_ONLY
+            }
+            statusHandler.post {
+                MaxStatus.mode = mode
+                instance?.refreshNotification()
+            }
+        }
+
+        private val statusHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
         fun resume(owner: String) {
             val free = synchronized(holds) {
@@ -84,6 +101,7 @@ class WakeWordService : Service() {
                 holds.isEmpty()
             }
             if (free) instance?.resumeListening()
+            refreshStatus()
         }
 
         private val isHeld: Boolean get() = synchronized(holds) { holds.isNotEmpty() }
@@ -143,7 +161,7 @@ class WakeWordService : Service() {
             if (!sessionActive) return
             sessionActive = false
             DebugLog.i("💤 Max so gaya — ab sirf 'Hello Max'")
-            instance?.refreshNotification()
+            refreshStatus()
         }
 
         private fun startSession() {
@@ -151,7 +169,15 @@ class WakeWordService : Service() {
             if (sessionActive) return
             sessionActive = true
             DebugLog.i("✅ Max active — ab sirf 'Max' bolo")
-            instance?.refreshNotification()
+            refreshStatus()
+            // 3 min baad bhi koi baat na ho to apne aap "sirf Hello Max" — status bhi sahi dikhe.
+            statusHandler.postDelayed(object : Runnable {
+                override fun run() {
+                    if (!sessionActive) return
+                    if (SystemClock.elapsedRealtime() - sessionTouchedAt > SESSION_IDLE_MS) endSession()
+                    else statusHandler.postDelayed(this, 20_000)
+                }
+            }, 20_000)
         }
     }
 
@@ -189,6 +215,7 @@ class WakeWordService : Service() {
         super.onCreate()
         DebugLog.init(this)
         instance = this
+        refreshStatus()
         startForeground(
             NOTIFICATION_ID,
             buildNotification(),
@@ -223,6 +250,7 @@ class WakeWordService : Service() {
 
     override fun onDestroy() {
         instance = null
+        refreshStatus()
         main.removeCallbacks(keepAlive)
         main.removeCallbacks(wakeWatchdog)
         removeBridgeWindow()
@@ -429,14 +457,13 @@ class WakeWordService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(if (sessionActive) "✅ Max active hai" else "Max sun raha hai")
-            .setContentText(
-                if (sessionActive) "Sirf \"Max\" bolo  •  \"Max stop\" se so jaayega" else "\"Hello Max\" bolo",
-            )
+            .setContentTitle(MaxStatus.title())
+            .setContentText(MaxStatus.detail())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(MaxStatus.detail()))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Max OFF karo", stop)
+            .addAction(0, "⏻ Sab band karo", stop)
             .build()
     }
 
