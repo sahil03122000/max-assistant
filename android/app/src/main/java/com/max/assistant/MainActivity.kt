@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -620,12 +621,17 @@ private fun LogScreen(onClose: () -> Unit) {
     }
 }
 
-/** Saari purani baat-cheet, date ke hisaab se (sabse nayi upar). Sirf padhne ke liye, search ke saath. */
+/**
+ * Purani baat-cheet: upar date chuno (default Aaj), us din ki baatein — sabse nayi sabse upar.
+ * Search kiya to saare dino mein dhundho (tab bhi nayi upar, date ke sheershak ke saath).
+ */
 @Composable
 private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     var entries by remember { mutableStateOf<List<HistoryEntry>?>(null) }
     var query by remember { mutableStateOf("") }
+    val zone = remember { ZoneId.systemDefault() }
+    var selectedDay by remember { mutableStateOf(LocalDate.now()) }
     LaunchedEffect(Unit) { entries = store.load() }
 
     MaxBackground {
@@ -640,7 +646,7 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("🔍 History mein dhundho...") },
+                placeholder = { Text("🔍 Saari history mein dhundho...") },
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp),
                 trailingIcon = {
@@ -648,51 +654,87 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 8.dp),
             )
-            val search = query.trim()
             val list = entries
-            val shown = remember(list, search) {
-                if (search.isEmpty()) list else list?.filter { it.text.contains(search, ignoreCase = true) }
+            val search = query.trim()
+            if (list == null) {
+                Text("Load ho raha hai...", color = MaxTextDim)
+                return@Column
             }
-            if (search.isNotEmpty() && shown != null) {
+            if (list.isEmpty()) {
+                Text("Abhi tak koi baat-cheet nahi hui", color = MaxTextDim, modifier = Modifier.padding(top = 24.dp))
+                return@Column
+            }
+            fun dayOf(e: HistoryEntry): LocalDate = Instant.ofEpochMilli(e.timestamp).atZone(zone).toLocalDate()
+
+            // Jin dino baat hui (sabse naya pehle) — aaj hamesha pehla chip, chahe aaj baat na hui ho.
+            val days = remember(list) { (listOf(LocalDate.now()) + list.map(::dayOf)).distinct().sortedDescending() }
+            if (search.isEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                    items(days) { day ->
+                        val selected = day == selectedDay
+                        Text(
+                            dayLabelShort(day),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(if (selected) Brush.linearGradient(listOf(MaxViolet, MaxIndigo)) else SolidColor(MaxSurface))
+                                .border(1.dp, if (selected) MaxViolet else MaxLine, RoundedCornerShape(18.dp))
+                                .clickable { selectedDay = day }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = if (selected) Color.White else MaxTextDim,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+            }
+
+            val shown = remember(list, search, selectedDay) {
+                val filtered = if (search.isEmpty()) list.filter { dayOf(it) == selectedDay }
+                else list.filter { it.text.contains(search, ignoreCase = true) }
+                filtered.sortedByDescending { it.timestamp }
+            }
+            if (search.isNotEmpty()) {
                 Text(
                     if (shown.isEmpty()) "\"$search\" kahin nahi mila" else "${shown.size} message mile",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaxTextDim,
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
             }
-            when {
-                shown == null -> Text("Load ho raha hai...", color = MaxTextDim)
-                list.isNullOrEmpty() -> Text("Abhi tak koi baat-cheet nahi hui", color = MaxTextDim, modifier = Modifier.padding(top = 24.dp))
-                shown.isEmpty() -> Unit
-                else -> {
-                    val zone = ZoneId.systemDefault()
-                    val byDay = remember(shown) {
-                        shown.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
-                            .toSortedMap(compareByDescending { it })
+            if (shown.isEmpty() && search.isEmpty()) {
+                Text(
+                    "${dayLabel(selectedDay)} koi baat-cheet nahi hui",
+                    color = MaxTextDim,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                return@Column
+            }
+            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                var lastDay: LocalDate? = null
+                shown.forEach { entry ->
+                    val day = dayOf(entry)
+                    // Search mein kai din aate hain — har din ka sheershak.
+                    if (search.isNotEmpty() && day != lastDay) {
+                        lastDay = day
+                        item(key = "day-$day") {
+                            Text(
+                                dayLabel(day),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaxViolet,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                            )
+                        }
                     }
-                    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        byDay.forEach { (day, dayEntries) ->
-                            item(key = day.toString()) {
-                                Text(
-                                    dayLabel(day),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaxViolet,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                                )
-                            }
-                            items(dayEntries) { entry ->
-                                Column(horizontalAlignment = if (entry.fromUser) Alignment.End else Alignment.Start, modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        TIME_FORMAT.format(Instant.ofEpochMilli(entry.timestamp).atZone(zone)),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaxTextDim,
-                                    )
-                                    Bubble(entry.text, entry.fromUser, highlight = search)
-                                }
-                            }
+                    item {
+                        Column(horizontalAlignment = if (entry.fromUser) Alignment.End else Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                TIME_FORMAT.format(Instant.ofEpochMilli(entry.timestamp).atZone(zone)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaxTextDim,
+                            )
+                            Bubble(entry.text, entry.fromUser, highlight = search)
                         }
                     }
                 }
@@ -703,6 +745,7 @@ private fun HistoryScreen(store: HistoryStore, onClose: () -> Unit) {
 
 private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.forLanguageTag("en-IN"))
 private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, EEEE", Locale.forLanguageTag("en-IN"))
+private val CHIP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("en-IN"))
 
 private fun dayLabel(day: LocalDate): String {
     val today = LocalDate.now()
@@ -710,5 +753,14 @@ private fun dayLabel(day: LocalDate): String {
         today -> "Aaj"
         today.minusDays(1) -> "Kal"
         else -> DAY_FORMAT.format(day)
+    }
+}
+
+private fun dayLabelShort(day: LocalDate): String {
+    val today = LocalDate.now()
+    return when (day) {
+        today -> "Aaj"
+        today.minusDays(1) -> "Kal"
+        else -> CHIP_FORMAT.format(day)
     }
 }
