@@ -73,6 +73,11 @@ class LiveSession(
     @Volatile private var halfDuplex = false
     /** Google ne "setupComplete" bheja — usse pehle aawaz bhejna galat (pehle setup jaana chahiye). */
     @Volatile private var ready = false
+    @Volatile private var messages = 0
+    @Volatile private var sentChunks = 0
+    @Volatile private var micPeakDb = -100.0
+    /** Saade mic par phone ka "call mode" bhi band (OnePlus par usme saada mic khaali deta tha). */
+    @Volatile private var oldModeForFallback: Int = AudioManager.MODE_NORMAL
     /** User ne "Max stop"/"bye" bola — Max so jaaye. */
     @Volatile private var stopped = false
 
@@ -106,6 +111,7 @@ class LiveSession(
         )
 
         val oldMode = audio.mode
+        oldModeForFallback = oldMode
         try {
             // Call jaisa mode: phone ka echo cancel tabhi theek chalta hai. Aawaz speaker par (earpiece nahi).
             audio.mode = AudioManager.MODE_IN_COMMUNICATION
@@ -151,7 +157,10 @@ class LiveSession(
                 continue
             }
             val msg = idle.getOrNull() ?: break
+            messages++
+            if (messages <= 3) DebugLog.i("🌐 Google se: ${msg.keys().asSequence().toList()}")
             if (msg.has("setupComplete")) {
+                DebugLog.i("🌐 Live: Google taiyaar — ab aawaz ja rahi hai")
                 ready = true
                 listener.onState(MaxState.Listening)
                 continue
@@ -264,17 +273,28 @@ class LiveSession(
                 record.startRecording()
                 val buf = ShortArray(CHUNK)
                 var zeros = 0
+                var lastReport = SystemClock.elapsedRealtime()
                 while (isActive && !closed) {
                     val n = record.read(buf, 0, CHUNK)
                     if (n <= 0) continue
                     val chunk = buf.copyOf(n)
                     listener.onLevel(level(chunk))
+                    micPeakDb = maxOf(micPeakDb, peakDb(chunk))
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastReport > 5_000) {
+                        DebugLog.i("🌐 mic: ${"%.0f".format(micPeakDb)} dB tak, $sentChunks tukde bheje, Google ready=$ready, $messages msg aaye")
+                        micPeakDb = -100.0
+                        lastReport = now
+                    }
                     if (echoCancel) {
-                        zeros = if (chunk.all { it.toInt() == 0 }) zeros + 1 else 0
-                        if (zeros >= 20) { // 2 sec bilkul zero — ye mic is phone par nahi chalta
-                            DebugLog.i("🌐 Echo-cancel mic khaali — saada mic (Max ke bolte waqt mic chup)")
+                        // Bilkul zero ya itna dheema ki kuch nahi (-90 dB) — 1.5 sec aisa = ye mic is phone par nahi chalta.
+                        zeros = if (peakDb(chunk) < -85) zeros + 1 else 0
+                        if (zeros >= 15) {
+                            DebugLog.i("🌐 Echo-cancel mic khaali — saada mic, normal mode (Max ke bolte waqt mic chup)")
                             echoCancel = false
                             halfDuplex = true
+                            if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
+                            audio.mode = AudioManager.MODE_NORMAL
                             break
                         }
                     }
@@ -308,7 +328,14 @@ class LiveSession(
         return record
     }
 
+    private fun peakDb(pcm: ShortArray): Double {
+        var peak = 0
+        for (s in pcm) peak = maxOf(peak, abs(s.toInt()))
+        return if (peak == 0) -100.0 else 20 * log10(peak / 32768.0)
+    }
+
     private fun sendAudio(pcm: ShortArray) {
+        sentChunks++
         val bytes = ByteArray(pcm.size * 2)
         for (i in pcm.indices) {
             bytes[2 * i] = (pcm[i].toInt() and 0xff).toByte()
