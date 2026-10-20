@@ -65,6 +65,7 @@ class DeviceActions(
             "open_app" -> openApp(args)
             "play_on_youtube" -> playOnYouTube(args)
             "play_music" -> playMusic(args)
+            "web_search" -> webSearch(args)
             "media_control" -> mediaControl(args)
             "open_camera" -> openCamera(args)
             "unlock_phone" -> unlockPhone()
@@ -382,6 +383,46 @@ class DeviceActions(
         if (MediaPause.isHolding()) MediaPause.keyAfterRelease = key else MediaPause.pressMediaKey(context, key)
         return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
     }
+
+    /**
+     * Internet par dhundho — phone ke apne internet se (DuckDuckGo). Cloud server (Render) se DuckDuckGo ruk jaata tha
+     * aur Bing bekaar nateeje deta tha ("nakshatra" par Samsung phones!). Ghar ka internet theek chalta hai.
+     */
+    private suspend fun webSearch(args: JSONObject): Outcome = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val query = args.optString("query").trim().ifEmpty { return@withContext Outcome(false, error = "Kya dhundhna hai ye nahi mila") }
+        val conn = java.net.URL("https://html.duckduckgo.com/html/").openConnection() as java.net.HttpURLConnection
+        val html = try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 10_000
+            conn.doOutput = true
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            conn.outputStream.use { it.write(("q=" + java.net.URLEncoder.encode(query, "UTF-8") + "&kl=in-en").toByteArray()) }
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            return@withContext Outcome(false, error = "Internet search nahi ho paaya: ${e.message}")
+        } finally {
+            conn.disconnect()
+        }
+        val results = Regex("""class="result__a"[^>]*>([\s\S]*?)</a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)</a>""")
+            .findAll(html).take(5)
+            .map { m -> cleanHtml("${m.groupValues[1]} — ${m.groupValues[2]}") }
+            .toList()
+        DebugLog.i("🔎 Web search: ${results.size} nateeje")
+        if (results.isEmpty()) return@withContext Outcome(false, error = "Internet par is baare mein kuch nahi mila")
+        Outcome(
+            true,
+            result = "Internet ke nateeje (inse seedha, pakka jawab do — tarikh/time/naam ke saath, 1-2 vaakya; andaza nahi):
+" +
+                results.joinToString("
+") { "- $it" },
+        )
+    }
+
+    private fun cleanHtml(s: String): String =
+        android.text.Html.fromHtml(s.replace(Regex("<[^>]+>"), ""), android.text.Html.FROM_HTML_MODE_LEGACY).toString()
+            .replace(Regex("""\s+"""), " ").trim()
 
     /** Phone mein kaunse music apps hain — Max sirf inhi mein se poochhe (YouTube Music nahi hai to mat poochho). */
     fun installedMusicApps(): List<String> =

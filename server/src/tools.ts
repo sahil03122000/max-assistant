@@ -173,6 +173,17 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     parameters: { type: Type.OBJECT, properties: {} },
   },
   {
+    name: "web_search",
+    description:
+      "Internet par dhundho (phone ke internet se) — muhurat/tyohar ka samay, panchang, bhav (sona, petrol, mandi), match score, kisi cheez ki taaza " +
+      "jaankari, 'X kya hai' jaise sawaal jinka jawab tumhe pakka nahi pata. Andaza lagane ki jagah ye use karo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { query: { type: Type.STRING, description: "Search ke shabd, English mein behtar (jaise 'Dussehra 2026 vijay muhurat time')" } },
+      required: ["query"],
+    },
+  },
+  {
     name: "media_control",
     description:
       "Phone par chal rahe video/gaane (YouTube, Instagram, Spotify...) ko control karo: pause, play, next, previous, ya media volume.",
@@ -234,17 +245,6 @@ const SERVER_TOOLS: FunctionDeclaration[] = [
         day: { type: Type.STRING, enum: ["today", "tomorrow"], description: "Aaj ya kal" },
       },
       required: ["city"],
-    },
-  },
-  {
-    name: "web_search",
-    description:
-      "Internet par dhundho — muhurat/tyohar ka samay, panchang, bhav (sona, petrol, mandi), match score, kisi cheez ki taaza " +
-      "jaankari, 'X kya hai' jaise sawaal jinka jawab tumhe pakka nahi pata. Andaza lagane ki jagah ye use karo.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: { query: { type: Type.STRING, description: "Search ke shabd, English mein behtar (jaise 'Dussehra 2026 vijay muhurat time')" } },
-      required: ["query"],
     },
   },
   {

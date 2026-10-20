@@ -198,7 +198,7 @@ class LiveSession(
             if (idle != null && idle.isClosed) break
             val now = SystemClock.elapsedRealtime()
             if (idle == null) {
-                if (!isPlaying() && !nudged && now - lastActivityAt > IDLE_NUDGE_MS) {
+                if (!isPlaying() && !nudged && now - lastActivityAt > IDLE_NUDGE_MS && (!userSpoke || lastMaxAskedQuestion)) {
                     // Chupchap band hona ajeeb lagta tha — ek baar bata do ki Max sun raha hai.
                     nudged = true
                     lastActivityAt = now
@@ -253,6 +253,7 @@ class LiveSession(
                     userText.append(it)
                     lastActivityAt = now
                     nudged = false
+                    userSpoke = true
                     if (SessionCommands.isStop(userText.toString())) {
                         ending = true
                         stopped = true
@@ -279,6 +280,7 @@ class LiveSession(
                 if (content.optBoolean("turnComplete")) {
                     listener.onState(MaxState.Listening)
                     flushUser(userText).also { userText = StringBuilder() }
+                    lastMaxAskedQuestion = maxText.toString().trim().endsWith("?")
                     Hinglish.romanize(maxText.toString().trim()).takeIf { it.isNotEmpty() }?.let {
                         DebugLog.i("Max: $it")
                         listener.onMaxText(it)
@@ -355,6 +357,9 @@ class LiveSession(
     }
 
     private var nudged = false
+    /** "Main sun raha hoon" sirf tab: user ne abhi tak kuch nahi bola, ya Max ka sawaal anuttarit hai. */
+    private var userSpoke = false
+    private var lastMaxAskedQuestion = false
 
     private fun sendText(text: String) = send(
         JSONObject().put(
@@ -628,7 +633,7 @@ class LiveSession(
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",
             "set_alarm", "set_timer", "set_reminder", "open_app", "play_on_youtube", "play_music", "media_control",
-            "open_camera", "unlock_phone",
+            "open_camera", "unlock_phone", "web_search",
         )
     }
 }
