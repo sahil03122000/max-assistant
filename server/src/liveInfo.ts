@@ -158,6 +158,40 @@ function decode(s: string): string {
  * Google Search grounding free API par nahi milta tha ("quota"), aur Max andaze se time bana deta tha.
  */
 export async function webSearch(query: string): Promise<Record<string, unknown>> {
+  // Cloud server (Render) se DuckDuckGo kabhi rok deta hai — Bing ka RSS backup, dono free, koi key nahi.
+  for (const source of [duckDuckGo, bingRss]) {
+    try {
+      const results = await source(query);
+      if (results.length) {
+        return {
+          ok: true,
+          query,
+          results,
+          instructions:
+            "In nateejon se seedha, pakka jawab do (tarikh/time/number ke saath), 1-2 vaakya. Nateeje aapas mein alag hon to " +
+            "sabse zyada wala batao. Andaza mat lagao; nateejon mein na ho to saaf bolo nahi mila.",
+        };
+      }
+      console.warn(`  🔎 ${source.name}: koi nateeja nahi`);
+    } catch (err) {
+      console.warn(`  🔎 ${source.name} fail: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  return { ok: false, error: "Internet par kuch nahi mila" };
+}
+
+async function bingRss(query: string): Promise<string[]> {
+  const res = await fetch(`https://www.bing.com/search?format=rss&cc=IN&q=${encodeURIComponent(query)}`, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" },
+    signal: AbortSignal.timeout(8000),
+  });
+  const xml = await res.text();
+  return [...xml.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<description>([\s\S]*?)<\/description>/g)]
+    .slice(0, 5)
+    .map((m) => clean(`${m[1]} — ${m[2]}`));
+}
+
+async function duckDuckGo(query: string): Promise<string[]> {
   const res = await fetch("https://html.duckduckgo.com/html/", {
     method: "POST",
     headers: {
@@ -168,18 +202,9 @@ export async function webSearch(query: string): Promise<Record<string, unknown>>
     signal: AbortSignal.timeout(8000),
   });
   const html = await res.text();
-  const results = [...html.matchAll(/class="result__a"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)]
+  return [...html.matchAll(/class="result__a"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)]
     .slice(0, 5)
     .map((m) => clean(`${m[1]} — ${m[2]}`));
-  if (!results.length) return { ok: false, error: "Internet par kuch nahi mila" };
-  return {
-    ok: true,
-    query,
-    results,
-    instructions:
-      "In nateejon se seedha, pakka jawab do (tarikh/time/number ke saath), 1-2 vaakya. Nateeje aapas mein alag hon to " +
-      "sabse zyada wala batao. Andaza mat lagao; nateejon mein na ho to saaf bolo nahi mila.",
-  };
 }
 
 function clean(s: string): string {
