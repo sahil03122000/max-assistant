@@ -6,7 +6,7 @@
 //  - SERVER tools: server par hi chalte hain (memory save/delete).
 import { Type, type FunctionDeclaration } from "@google/genai";
 import { memoryStore } from "./memory.js";
-import { getNews, getWeather } from "./liveInfo.js";
+import { getNews, getWeather, webSearch } from "./liveInfo.js";
 import { searchYouTube } from "./youtube.js";
 
 const contactName = {
@@ -237,6 +237,17 @@ const SERVER_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "web_search",
+    description:
+      "Internet par dhundho — muhurat/tyohar ka samay, panchang, bhav (sona, petrol, mandi), match score, kisi cheez ki taaza " +
+      "jaankari, 'X kya hai' jaise sawaal jinka jawab tumhe pakka nahi pata. Andaza lagane ki jagah ye use karo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { query: { type: Type.STRING, description: "Search ke shabd, English mein behtar (jaise 'Dussehra 2026 vijay muhurat time')" } },
+      required: ["query"],
+    },
+  },
+  {
     name: "get_news",
     description: "Aaj ki taaza khabrein (India). Kisi vishay ki khabar chahiye to topic do, jaise 'cricket', 'Jaipur', 'share market'.",
     parameters: {
@@ -320,6 +331,8 @@ export async function runServerTool(userId: string, name: string, args: Record<s
         ok: false,
         error: `Mausam ki service abhi jawab nahi de rahi (${err instanceof Error ? err.message : err})`,
       }));
+    case "web_search":
+      return webSearch(String(args.query ?? "")).catch(() => ({ ok: false, error: "Internet search abhi nahi ho paaya" }));
     case "get_news":
       return getNews(typeof args.topic === "string" && args.topic.trim() ? args.topic.trim() : undefined).catch(() => ({
         ok: false,

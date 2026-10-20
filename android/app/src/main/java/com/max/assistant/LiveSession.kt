@@ -59,7 +59,13 @@ class LiveSession(
     }
 
     /** Session khatam hone ke baad kholne wali screens (call, YouTube...) — jaise purane flow mein. */
-    class Result(val launches: List<Intent>, val afterLaunches: List<() -> Unit>, val stopped: Boolean)
+    class Result(
+        val launches: List<Intent>,
+        val afterLaunches: List<() -> Unit>,
+        val stopped: Boolean,
+        /** Google ki taraf se connection toota (1011 jaisa) — user ne band nahi kiya, baat beech mein thi. */
+        val broken: Boolean = false,
+    )
 
     private val audio = context.getSystemService(AudioManager::class.java)
     private val settings = Settings(context)
@@ -83,6 +89,8 @@ class LiveSession(
     private var firstInstruction: String? = null
     /** Koi kaam (WhatsApp, call...) chal raha hai — tab mic ki aawaz Google ko mat bhejo (app/call ki aawaz hukm ban jaati thi). */
     @Volatile private var toolRunning = false
+    @Volatile private var closeCode = 0
+    @Volatile private var idleEnded = false
     @Volatile private var messages = 0
     @Volatile private var sentChunks = 0
     @Volatile private var micPeakDb = -100.0
@@ -126,11 +134,16 @@ class LiveSession(
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                     runCatching { incoming.trySend(JSONObject(bytes.utf8())) }
                 }
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    closeCode = code
+                }
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    closeCode = code
                     DebugLog.i("🌐 Live band ($code${if (reason.isNotBlank()) ": $reason" else ""})")
                     incoming.close()
                 }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    if (!closed) closeCode = -1
                     DebugLog.e("🌐 Live connection toot gaya", t)
                     incoming.close()
                 }
@@ -169,7 +182,7 @@ class LiveSession(
             if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
             audio.mode = oldMode
         }
-        Result(launches.toList(), afterLaunches.toList(), stopped)
+        Result(launches.toList(), afterLaunches.toList(), stopped, broken = closeCode != 0 && closeCode != 1000 && !stopped && !idleEnded)
     }
 
     // ---------- Google se aaye message ----------
@@ -197,6 +210,7 @@ class LiveSession(
                 }
                 if (!isPlaying() && nudged && now - lastActivityAt > IDLE_END_MS) {
                     DebugLog.i("🌐 Live: chup — band")
+                    idleEnded = true
                     break
                 }
                 if ((ending || launches.isNotEmpty()) && !isPlaying()) break

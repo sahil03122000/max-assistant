@@ -152,3 +152,36 @@ function decode(s: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
 }
+
+/**
+ * Internet par dhundho (DuckDuckGo, free, koi key nahi) — muhurat, tyohar, bhav, score, taaza jaankari.
+ * Google Search grounding free API par nahi milta tha ("quota"), aur Max andaze se time bana deta tha.
+ */
+export async function webSearch(query: string): Promise<Record<string, unknown>> {
+  const res = await fetch("https://html.duckduckgo.com/html/", {
+    method: "POST",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: "q=" + encodeURIComponent(query) + "&kl=in-en",
+    signal: AbortSignal.timeout(8000),
+  });
+  const html = await res.text();
+  const results = [...html.matchAll(/class="result__a"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)]
+    .slice(0, 5)
+    .map((m) => clean(`${m[1]} — ${m[2]}`));
+  if (!results.length) return { ok: false, error: "Internet par kuch nahi mila" };
+  return {
+    ok: true,
+    query,
+    results,
+    instructions:
+      "In nateejon se seedha, pakka jawab do (tarikh/time/number ke saath), 1-2 vaakya. Nateeje aapas mein alag hon to " +
+      "sabse zyada wala batao. Andaza mat lagao; nateejon mein na ho to saaf bolo nahi mila.",
+  };
+}
+
+function clean(s: string): string {
+  return decode(s.replace(/<[^>]+>/g, "")).replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
+}

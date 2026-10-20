@@ -86,6 +86,8 @@ class MaxController(
 
     private fun isLive() = settings.listenEngine == Settings.ENGINE_LIVE
 
+    private var reconnects = 0
+
     /** WhatsApp par jawab aaya — Max bataye aur poochhe reply karna hai? (OTP/card jaisi cheezein pehle chhupa do.) */
     private suspend fun announce(chat: String, messages: List<String>) {
         val text = PrivacyFilter.apply(messages.joinToString(" | ")).text
@@ -123,7 +125,8 @@ class MaxController(
         // "Hello Max" par turant apni (saved) aawaz mein "Haan ji, boliye" — Google se judne ke 3-5 sec ka sannata nahi.
         val localGreeting = command == null && firstInstruction == null
         if (localGreeting) {
-            session.micMutedUntil = Long.MAX_VALUE
+            // Greeting atak jaaye to bhi mic hamesha ke liye band na rahe (pehle 30 sec kuch nahi suna gaya tha).
+            session.micMutedUntil = android.os.SystemClock.elapsedRealtime() + 5_000
             scope.launch {
                 val name = profiles.load().displayName
                 val text = (if (name.isNotBlank()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
@@ -131,7 +134,9 @@ class MaxController(
                 addMessage(fromUser = false, text = text, saveToHistory = false)
                 try {
                     val wav = if (settings.voice == Settings.PHONE_VOICE) null else withTimeoutOrNull(2_500) { fetchVoice(text, settings.voice) }
-                    if (wav != null) voicePlayer.play(wav) else speaker.speak(text, settings.phoneVoice)
+                    withTimeoutOrNull(4_500) {
+                        if (wav != null) voicePlayer.play(wav) else speaker.speak(text, settings.phoneVoice)
+                    } ?: DebugLog.i("Greeting atak gayi — chhod di")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -152,6 +157,14 @@ class MaxController(
             return
         }
         micLevel = 0f
+        // Google ki taraf se connection toota (baat beech mein) — ek baar khud dobara judo, baat yaad ke saath.
+        if (result.broken && result.launches.isEmpty() && reconnects < 1) {
+            reconnects++
+            DebugLog.i("🌐 Live toota — dobara jud raha hoon")
+            runLive(null, firstInstruction = "[Connection thodi der ke liye toota tha. Bas itna bolo: \"Maaf kijiye, connection toot gaya tha — haan, boliye.\" Agar pichhli baat mein koi kaam adhoora tha to use poora karo.]")
+            return
+        }
+        reconnects = 0
         if (result.stopped) WakeWordService.endSession()
         for (intent in result.launches) {
             try {
