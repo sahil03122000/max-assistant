@@ -413,10 +413,8 @@ class DeviceActions(
         if (results.isEmpty()) return@withContext Outcome(false, error = "Internet par is baare mein kuch nahi mila")
         Outcome(
             true,
-            result = "Internet ke nateeje (inse seedha, pakka jawab do — tarikh/time/naam ke saath, 1-2 vaakya; andaza nahi):
-" +
-                results.joinToString("
-") { "- $it" },
+            result = "Internet ke nateeje (inse seedha, pakka jawab do — tarikh/time/naam ke saath, 1-2 vaakya; andaza nahi):\n" +
+                results.joinToString("\n") { "- $it" },
         )
     }
 
