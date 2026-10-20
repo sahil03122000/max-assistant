@@ -117,7 +117,7 @@ class LiveSession(
         val name = profile.optString("callingName").trim()
         greeting = (if (name.isNotEmpty()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
         else listOf("Haan ji, boliye", "Ji, bataiye", "Haan ji?")).random()
-        val tokenJson = api.liveToken(profile)
+        val tokenJson = api.liveToken(profile, manualVad = true)
         val model = tokenJson.getString("model")
         val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build()
         val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService." +
@@ -179,6 +179,7 @@ class LiveSession(
                 track?.let { runCatching { it.stop() }; it.release() }
                 track = null
             }
+            runCatching { tick.release() }
             if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
             audio.mode = oldMode
         }
@@ -276,6 +277,7 @@ class LiveSession(
                     }
                 }
                 if (content.optBoolean("turnComplete")) {
+                    listener.onState(MaxState.Listening)
                     flushUser(userText).also { userText = StringBuilder() }
                     Hinglish.romanize(maxText.toString().trim()).takeIf { it.isNotEmpty() }?.let {
                         DebugLog.i("Max: $it")
@@ -374,8 +376,8 @@ class LiveSession(
     private suspend fun micLoop(firstPcm: ShortArray?) = withContext(Dispatchers.IO) {
         // Connection taiyaar hone tak ruko (aawaz is beech bhi record ho rahi hai neeche — bas bhejte baad mein).
         val pending = ArrayDeque<ShortArray>()
-        // "Hello Max, papa ko call karo" — saath wali baat pehle bhejo.
-        firstPcm?.let { pcm -> pcm.toList().chunked(CHUNK).forEach { pending.addLast(it.toShortArray()) } }
+        // "Hello Max, papa ko call karo" — saath wali baat ek poori baat (shuru → khatam) ki tarah pehle bhejo.
+        var firstCommand: List<ShortArray>? = firstPcm?.toList()?.chunked(CHUNK)?.map { it.toShortArray() }
         var echoCancel = !settings.liveEchoCancelBroken
         while (isActive && !closed) {
             val record = openMic(echoCancel) ?: break
@@ -417,12 +419,18 @@ class LiveSession(
                         while (pending.size > 100) pending.removeFirst() // max ~10 sec
                         continue
                     }
-                    while (pending.isNotEmpty()) sendAudio(pending.removeFirst())
+                    firstCommand?.let { cmd ->
+                        firstCommand = null
+                        sendActivity(start = true)
+                        cmd.forEach(::sendAudio)
+                        endOfUserTurn()
+                    }
                     // Max bol raha hai ya abhi-abhi chup hua (kamre mein uski goonj ~0.8 sec) — mic ki aawaz mat bhejo,
                     // warna Google apni hi goonj ko user ki baat samajh ke khud se baat karta rehta tha.
                     if (halfDuplex && (isPlaying() || SystemClock.elapsedRealtime() - lastPlayedAt < ECHO_TAIL_MS)) continue
                     if (toolRunning) continue
-                    sendAudio(chunk)
+                    while (pending.isNotEmpty()) vad(pending.removeFirst())
+                    vad(chunk)
                 }
             } finally {
                 runCatching { record.stop() }
@@ -443,6 +451,71 @@ class LiveSession(
             if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(record.audioSessionId)?.enabled = true }
         }
         return record
+    }
+
+    // ---------- Baat shuru / khatam (phone khud tay karta hai) ----------
+    // Google apne aap tay karta tha ki user ki baat khatam hui — kamre mein lagatar halka shor (pankha/TV) ho to wo
+    // kabhi "khatam" nahi maanta tha aur jawab hi nahi aata tha. Ab phone shor naap ke khud batata hai.
+
+    private var speaking = false
+    private var loudChunks = 0
+    private var quietChunks = 0
+    private var speechPeak = -100.0
+    private var speechStartedAt = 0L
+    private val noiseWindow = ArrayDeque<Double>()
+    private val preRoll = ArrayDeque<ShortArray>()
+
+    private fun vad(chunk: ShortArray) {
+        val db = rmsDb(chunk)
+        val noise = if (noiseWindow.size >= 5) noiseWindow.sorted()[noiseWindow.size / 5] else -60.0
+        val now = SystemClock.elapsedRealtime()
+        if (!speaking) {
+            noiseWindow.addLast(db)
+            while (noiseWindow.size > 30) noiseWindow.removeFirst() // ~3 sec
+            preRoll.addLast(chunk)
+            while (preRoll.size > 4) preRoll.removeFirst()
+            loudChunks = if (db > maxOf(noise + 9, -48.0)) loudChunks + 1 else 0
+            if (loudChunks >= 3) {
+                speaking = true
+                speechPeak = db
+                quietChunks = 0
+                speechStartedAt = now
+                sendActivity(start = true)
+                preRoll.forEach(::sendAudio) // pehla shabd na kate
+                preRoll.clear()
+                listener.onState(MaxState.Listening)
+            }
+            return
+        }
+        sendAudio(chunk)
+        speechPeak = maxOf(speechPeak, db)
+        quietChunks = if (db < maxOf(noise + 5, speechPeak - 18)) quietChunks + 1 else 0
+        if (quietChunks >= 8 || now - speechStartedAt > 20_000) {
+            speaking = false
+            loudChunks = 0
+            endOfUserTurn()
+        }
+    }
+
+    /** User ki baat khatam: Google ko batao, "tik" bajao, orb "soch raha hoon". */
+    private fun endOfUserTurn() {
+        sendActivity(start = false)
+        lastActivityAt = SystemClock.elapsedRealtime()
+        micMutedUntil = SystemClock.elapsedRealtime() + 350 // "tik" khud na suna jaaye
+        runCatching { tick.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 90) }
+        listener.onState(MaxState.Thinking)
+    }
+
+    private val tick by lazy { android.media.ToneGenerator(AudioManager.STREAM_MUSIC, 35) }
+
+    private fun sendActivity(start: Boolean) =
+        send(JSONObject().put("realtimeInput", JSONObject().put(if (start) "activityStart" else "activityEnd", JSONObject())))
+
+    private fun rmsDb(pcm: ShortArray): Double {
+        var sum = 0.0
+        for (s in pcm) sum += s.toDouble() * s
+        val rms = sqrt(sum / pcm.size.coerceAtLeast(1))
+        return if (rms < 1) -100.0 else 20 * log10(rms / 32768.0)
     }
 
     private fun peakDb(pcm: ShortArray): Double {
@@ -538,7 +611,7 @@ class LiveSession(
     private fun isPlaying(): Boolean {
         val t = track ?: return false
         val playing = t.playbackHeadPosition.toLong() and 0xffffffffL < framesWritten
-        if (playing) lastPlayedAt = SystemClock.elapsedRealtime() else listener.onState(MaxState.Listening)
+        if (playing) lastPlayedAt = SystemClock.elapsedRealtime()
         return playing
     }
 

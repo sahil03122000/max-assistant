@@ -46,7 +46,8 @@ LIVE VOICE MODE (tum seedha user ki aawaz sun rahe ho, aur tumhari baat aawaz me
 - Message bhejne ke baad user "haan"/"theek hai" bole to wo pichhle ki pushti hai — wahi message dobara mat bhejo.
 - Card, OTP, PIN, password, Aadhaar, bank number kabhi dohraao ya yaad mat rakho.`;
 
-export async function createLiveToken(userId: string, profile?: UserProfile): Promise<{ token: string; model: string }> {
+/** [manualVad]: naya phone app khud batata hai baat kab shuru/khatam hui (shor mein Google ka andaza atak jaata tha). */
+export async function createLiveToken(userId: string, profile?: UserProfile, manualVad = false): Promise<{ token: string; model: string }> {
   const memories = await memoryStore.list(userId);
   const recent = profile?.recentContext?.length
     ? "\n\nPICHHLI BAAT-CHEET (haal hi ki, user wahi aage badha raha ho sakta hai — \"doosra/agla/next/ye nahi\" ka matlab " +
@@ -66,7 +67,9 @@ export async function createLiveToken(userId: string, profile?: UserProfile): Pr
           responseModalities: [Modality.AUDIO],
           systemInstruction,
           // Halka shor / Max ki apni goonj ko "user bola" na samjhe (warna khud se baat karta rehta tha).
-          realtimeInputConfig: {
+          realtimeInputConfig: manualVad
+            ? { automaticActivityDetection: { disabled: true } }
+            : {
             automaticActivityDetection: {
               startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
               // Baat khatam hote hi jawab (LOW mein Google der tak intezaar karta tha — 5-7 sec lagte the).
@@ -74,7 +77,7 @@ export async function createLiveToken(userId: string, profile?: UserProfile): Pr
               prefixPaddingMs: 200,
               silenceDurationMs: 500,
             },
-          },
+              },
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.GEMINI_TTS_VOICE } } },
           // Dono taraf ka likha hua bhi aaye — screen par dikhane, history aur logs ke liye.
           inputAudioTranscription: {},

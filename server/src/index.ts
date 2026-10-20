@@ -131,8 +131,8 @@ app.post("/v1/transcribe", express.raw({ type: "audio/*", limit: "3mb" }), async
 
 // Live mode: phone ke liye Gemini Live ki ek-baar wali chaabi (prompt + tools isi mein band).
 app.post("/v1/live/token", async (req, res) => {
-  const body = z.object({ profile: ProfileBody.optional() }).parse(req.body ?? {});
-  res.json(await createLiveToken(DEFAULT_USER, body.profile));
+  const body = z.object({ profile: ProfileBody.optional(), manualVad: z.boolean().optional() }).parse(req.body ?? {});
+  res.json(await createLiveToken(DEFAULT_USER, body.profile, body.manualVad ?? false));
 });
 
 // Live mode mein AI ne kaam maanga: server wale kaam yahin, phone wale kaam ke args poore karke (YouTube video_id).

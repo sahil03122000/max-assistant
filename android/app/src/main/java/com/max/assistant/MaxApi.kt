@@ -57,8 +57,8 @@ class MaxApi(private val baseUrl: () -> String, private val token: String) {
         )
 
     /** Live mode (Gemini Live) ki ek-baar wali chaabi + model. */
-    suspend fun liveToken(profile: JSONObject): JSONObject =
-        JSONObject(String(request("/v1/live/token", JSONObject().put("profile", profile), readTimeoutMs = 75_000)))
+    suspend fun liveToken(profile: JSONObject, manualVad: Boolean = false): JSONObject =
+        JSONObject(String(request("/v1/live/token", JSONObject().put("profile", profile).put("manualVad", manualVad), readTimeoutMs = 75_000)))
 
     /** Live mode: server wala kaam (memory/mausam/news) ya phone wale kaam ke poore args. */
     suspend fun liveTool(name: String, args: JSONObject): JSONObject =
