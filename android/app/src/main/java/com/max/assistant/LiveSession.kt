@@ -180,6 +180,7 @@ class LiveSession(
                 track = null
             }
             runCatching { tick.release() }
+            runCatching { stopRecognizer?.close() }
             if (Build.VERSION.SDK_INT >= 31) audio.clearCommunicationDevice()
             audio.mode = oldMode
         }
@@ -209,8 +210,20 @@ class LiveSession(
                     )
                     continue
                 }
-                if (!isPlaying() && nudged && now - lastActivityAt > IDLE_END_MS) {
-                    DebugLog.i("🌐 Live: chup — band")
+                val idleFor = now - lastActivityAt
+                val quietLimit = if (nudged) IDLE_END_MS else IDLE_NUDGE_MS + IDLE_END_MS
+                if (!isPlaying() && !farewellSent && idleFor > quietLimit) {
+                    // Chupchap band hona ajeeb tha — pyaar se alvida, phir band.
+                    farewellSent = true
+                    farewellAt = now
+                    sendText(
+                        "[User ab kuch nahi bol raha, baat-cheet band ho rahi hai. Bas itna bolo: " +
+                            "\"Koi baat nahi, jab zaroorat ho tab Hello Max boliye.\" — aur kuch nahi, koi tool nahi.]",
+                    )
+                    continue
+                }
+                if (farewellSent && !isPlaying() && (farewellDone || now - farewellAt > 8_000)) {
+                    DebugLog.i("🌐 Live: chup — alvida bol ke band")
                     idleEnded = true
                     break
                 }
@@ -254,12 +267,17 @@ class LiveSession(
                     lastActivityAt = now
                     nudged = false
                     userSpoke = true
+                    farewellSent = false
+                    farewellDone = false
                     if (SessionCommands.isStop(userText.toString())) {
                         ending = true
                         stopped = true
                     }
                 }
-                content.optJSONObject("outputTranscription")?.optString("text")?.let { maxText.append(it) }
+                content.optJSONObject("outputTranscription")?.optString("text")?.let {
+                    maxText.append(it)
+                    currentMaxText = maxText.toString()
+                }
                 content.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
                     flushUser(userText).also { userText = StringBuilder() }
                     for (i in 0 until parts.length()) {
@@ -279,6 +297,7 @@ class LiveSession(
                 }
                 if (content.optBoolean("turnComplete")) {
                     listener.onState(MaxState.Listening)
+                    if (farewellSent) farewellDone = true
                     flushUser(userText).also { userText = StringBuilder() }
                     lastMaxAskedQuestion = maxText.toString().trim().endsWith("?")
                     Hinglish.romanize(maxText.toString().trim()).takeIf { it.isNotEmpty() }?.let {
@@ -357,6 +376,9 @@ class LiveSession(
     }
 
     private var nudged = false
+    private var farewellSent = false
+    private var farewellDone = false
+    private var farewellAt = 0L
     /** "Main sun raha hoon" sirf tab: user ne abhi tak kuch nahi bola, ya Max ka sawaal anuttarit hai. */
     private var userSpoke = false
     private var lastMaxAskedQuestion = false
@@ -432,7 +454,12 @@ class LiveSession(
                     }
                     // Max bol raha hai ya abhi-abhi chup hua (kamre mein uski goonj ~0.8 sec) — mic ki aawaz mat bhejo,
                     // warna Google apni hi goonj ko user ki baat samajh ke khud se baat karta rehta tha.
-                    if (halfDuplex && (isPlaying() || SystemClock.elapsedRealtime() - lastPlayedAt < ECHO_TAIL_MS)) continue
+                    if (halfDuplex && (isPlaying() || SystemClock.elapsedRealtime() - lastPlayedAt < ECHO_TAIL_MS)) {
+                        // Is phone par Max ke bolte waqt mic Google ko nahi jaata — par phone khud (offline) "Max"/"stop"
+                        // sunta rahe, taaki beech mein rokna kaam kare.
+                        if (isPlaying() && stopWordHeard(chunk)) interruptMax()
+                        continue
+                    }
                     if (toolRunning) continue
                     while (pending.isNotEmpty()) vad(pending.removeFirst())
                     vad(chunk)
@@ -456,6 +483,44 @@ class LiveSession(
             if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(record.audioSessionId)?.enabled = true }
         }
         return record
+    }
+
+    // ---------- Max ke bolte waqt "Max" / "stop" / "ruko" (phone par hi, offline Vosk) ----------
+
+    @Volatile private var currentMaxText = ""
+    private var stopRecognizer: org.vosk.Recognizer? = null
+    private var stopCandidate = ""
+    private var stopChunks = 0
+
+    private fun stopWordHeard(chunk: ShortArray): Boolean {
+        val model = WakeWordService.sharedModel ?: return false
+        val rec = stopRecognizer ?: runCatching {
+            org.vosk.Recognizer(model, IN_RATE.toFloat(), STOP_GRAMMAR)
+        }.getOrNull()?.also { stopRecognizer = it } ?: return false
+        rec.acceptWaveForm(chunk, chunk.size)
+        if (++stopChunks % 3 != 0) return false
+        val partial = runCatching { JSONObject(rec.partialResult).optString("partial") }.getOrDefault("")
+        val word = partial.split(" ").lastOrNull { it == "max" || it == "stop" || it == "ruko" }.orEmpty()
+        // Do baar lagatar (0.3 sec) wahi shabd — Max ki apni aawaz ki goonj se galti se na ruke.
+        // Max khud abhi wo shabd bol raha ho (jaise apna naam "Max") to mat roko.
+        val confirmed = word.isNotEmpty() && word == stopCandidate && !currentMaxText.lowercase().contains(word)
+        stopCandidate = word
+        return confirmed
+    }
+
+    private fun interruptMax() {
+        DebugLog.i("✋ Beech mein roka (user ne Max/stop bola)")
+        clearPlayback()
+        stopRecognizer?.reset()
+        stopCandidate = ""
+        lastPlayedAt = 0L
+        // Google ko bata do user bol raha hai — wo apna jawab rok deta hai; aage ki baat VAD sambhalega.
+        speaking = true
+        speechPeak = -30.0
+        quietChunks = 0
+        speechStartedAt = SystemClock.elapsedRealtime()
+        sendActivity(start = true)
+        listener.onState(MaxState.Listening)
     }
 
     // ---------- Baat shuru / khatam (phone khud tay karta hai) ----------
@@ -628,6 +693,7 @@ class LiveSession(
         const val OUT_RATE = 24000
         const val CHUNK = 1600 // 0.1 sec
         const val IDLE_NUDGE_MS = 15_000L
+        const val STOP_GRAMMAR = """["max", "stop", "ruko", "[unk]"]"""
         const val IDLE_END_MS = 15_000L
         const val ECHO_TAIL_MS = 900L
         val DEVICE_TOOLS = setOf(

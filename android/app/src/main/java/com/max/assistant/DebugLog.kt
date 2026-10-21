@@ -52,6 +52,10 @@ object DebugLog {
         val f = file ?: return
         writer.execute {
             runCatching {
+                // Sirf aaj ke logs — naya din to purane mita do (bhejne par sirf aaj ka dikhe, chhota rahe).
+                val zone = java.time.ZoneId.systemDefault()
+                val fileDay = java.time.Instant.ofEpochMilli(f.lastModified()).atZone(zone).toLocalDate()
+                if (f.exists() && fileDay != java.time.LocalDate.now(zone)) f.writeText("")
                 if (f.length() > MAX_FILE_BYTES) f.writeText("") // bahut badi ho gayi to nayi shuru
                 f.appendText(line + "\n")
             }

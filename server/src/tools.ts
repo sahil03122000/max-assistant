@@ -5,6 +5,7 @@
 //    Android app karta hai aur result wapas bhejta hai.
 //  - SERVER tools: server par hi chalte hain (memory save/delete).
 import { Type, type FunctionDeclaration } from "@google/genai";
+import { config } from "./config.js";
 import { memoryStore } from "./memory.js";
 import { getNews, getWeather, webSearch } from "./liveInfo.js";
 import { searchYouTube } from "./youtube.js";
@@ -235,6 +236,11 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
 
 const SERVER_TOOLS: FunctionDeclaration[] = [
   {
+    name: "get_current_time",
+    description: "Abhi ka sahi time, din aur tarikh (India). Time/tarikh/din poochha jaaye ya time se judi baat (rahukaal chal raha hai ya nahi) ho to HAMESHA ye call karo — andaza kabhi nahi.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
     name: "get_weather",
     description:
       "Mausam (aaj ya kal): taapmaan, aasmaan, baarish ka chance. Shehar user ne na bola ho to profile wala shehar; wo bhi na ho to user se poocho.",
@@ -324,6 +330,15 @@ export async function runServerTool(userId: string, name: string, args: Record<s
         ok: true,
         instructions: "Options ko bilkul isi order mein bolo (option 1 pehle). User 'doosra' bole to option 2.",
         options: picked.map((v, i) => ({ option: i + 1, title: v.title, channel: v.channel, video_id: v.videoId })),
+      };
+    }
+    case "get_current_time": {
+      const now = new Date();
+      return {
+        ok: true,
+        time: now.toLocaleTimeString("en-IN", { timeZone: config.TIMEZONE, hour: "numeric", minute: "2-digit", hour12: true }),
+        date: now.toLocaleDateString("en-IN", { timeZone: config.TIMEZONE, weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+        instructions: "Time Hinglish mein bolo, jaise 'Abhi subah ke 10 bajkar 56 minute hue hain'.",
       };
     }
     case "get_weather":

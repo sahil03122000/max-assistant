@@ -36,6 +36,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("live_aec_broken", false)
         set(value) = prefs.edit { putBoolean("live_aec_broken", value) }
 
+    /** "Hello Max" par Max kya bole — ';' se alag kai line (har baar koi ek). Khaali = time ke hisaab se. */
+    var greetings: String
+        get() = prefs.getString("greetings", null).orEmpty()
+        set(value) = prefs.edit { putString("greetings", value) }
+
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)
         set(value) = prefs.edit { putBoolean("wake_word", value) }

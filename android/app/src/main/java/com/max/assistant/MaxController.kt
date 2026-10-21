@@ -88,6 +88,19 @@ class MaxController(
 
     private var reconnects = 0
 
+    /** User ki apni greeting (Settings) ya time ke hisaab se: subah "Good morning", shaam "Good evening". */
+    private fun liveGreeting(name: String): String {
+        settings.greetings.split(";", "\n").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }?.let {
+            return it.random().replace("{naam}", name).replace(Regex(" +"), " ").trim()
+        }
+        val withName = if (name.isNotBlank()) " $name" else ""
+        return when (java.time.LocalTime.now().hour) {
+            in 4..11 -> listOf("Good morning$withName, boliye", "Suprabhat$withName, kya karun?", "Haan ji$withName, boliye")
+            in 16..20 -> listOf("Good evening$withName, boliye", "Haan ji$withName, bataiye")
+            else -> listOf("Haan ji$withName, boliye", "Ji$withName?", "Boliye$withName")
+        }.random()
+    }
+
     /** WhatsApp par jawab aaya — Max bataye aur poochhe reply karna hai? (OTP/card jaisi cheezein pehle chhupa do.) */
     private suspend fun announce(chat: String, messages: List<String>) {
         val text = PrivacyFilter.apply(messages.joinToString(" | ")).text
@@ -128,9 +141,8 @@ class MaxController(
             // Greeting atak jaaye to bhi mic hamesha ke liye band na rahe (pehle 30 sec kuch nahi suna gaya tha).
             session.micMutedUntil = android.os.SystemClock.elapsedRealtime() + 5_000
             scope.launch {
-                val name = profiles.load().displayName
-                val text = (if (name.isNotBlank()) listOf("Haan ji $name, boliye", "Ji $name?", "Haan ji, bataiye", "Boliye $name")
-                else listOf("Haan ji, boliye", "Ji, bataiye", "Haan ji?")).random()
+                val text = liveGreeting(profiles.load().displayName)
+                DebugLog.i("👋 Greeting: $text")
                 addMessage(fromUser = false, text = text, saveToHistory = false)
                 try {
                     val wav = if (settings.voice == Settings.PHONE_VOICE) null else withTimeoutOrNull(2_500) { fetchVoice(text, settings.voice) }

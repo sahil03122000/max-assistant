@@ -580,6 +580,18 @@ private fun SettingsScreen(
                             }
                         }
                     }
+                    var greetings by remember { mutableStateOf(settings.greetings) }
+                    OutlinedTextField(
+                        value = greetings,
+                        onValueChange = {
+                            greetings = it
+                            settings.greetings = it
+                        },
+                        label = { Text("\"Hello Max\" par Max kya bole") },
+                        placeholder = { Text("Radhe Radhe {naam}; Good morning, boliye") },
+                        supportingText = { Text("Khaali = time ke hisaab se (Good morning…). Kai likhni hon to ; se alag karo. {naam} = aapka naam") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    )
                     Text("Max ki aawaz (tap = sunao)", style = MaterialTheme.typography.labelLarge, color = MaxTextDim, modifier = Modifier.padding(top = 6.dp))
                     Settings.VOICES.forEach { (id, label) ->
                         ChoiceRow(label, voice == id) {
