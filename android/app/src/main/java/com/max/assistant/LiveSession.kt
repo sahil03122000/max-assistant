@@ -282,7 +282,7 @@ class LiveSession(
                     flushUser(userText).also { userText = StringBuilder() }
                     for (i in 0 until parts.length()) {
                         val data = parts.getJSONObject(i).optJSONObject("inlineData")?.optString("data") ?: continue
-                        playback.trySend(Base64.decode(data, Base64.DEFAULT))
+                        if (!dropUntilTurnEnd) playback.trySend(Base64.decode(data, Base64.DEFAULT))
                         lastActivityAt = now
                     }
                 }
@@ -296,6 +296,7 @@ class LiveSession(
                     }
                 }
                 if (content.optBoolean("turnComplete")) {
+                    dropUntilTurnEnd = false
                     listener.onState(MaxState.Listening)
                     if (farewellSent) farewellDone = true
                     flushUser(userText).also { userText = StringBuilder() }
@@ -491,6 +492,9 @@ class LiveSession(
     private var stopRecognizer: org.vosk.Recognizer? = null
     private var stopCandidate = ""
     private var stopChunks = 0
+    private var stopHits = 0
+    /** User ne roka — is jawab ki baaki aawaz phenko (Google ko nahi pata, wo bhejta rahega). */
+    @Volatile private var dropUntilTurnEnd = false
 
     private fun stopWordHeard(chunk: ShortArray): Boolean {
         val model = WakeWordService.sharedModel ?: return false
@@ -501,25 +505,22 @@ class LiveSession(
         if (++stopChunks % 3 != 0) return false
         val partial = runCatching { JSONObject(rec.partialResult).optString("partial") }.getOrDefault("")
         val word = partial.split(" ").lastOrNull { it == "max" || it == "stop" || it == "ruko" }.orEmpty()
-        // Do baar lagatar (0.3 sec) wahi shabd — Max ki apni aawaz ki goonj se galti se na ruke.
-        // Max khud abhi wo shabd bol raha ho (jaise apna naam "Max") to mat roko.
-        val confirmed = word.isNotEmpty() && word == stopCandidate && !currentMaxText.lowercase().contains(word)
+        // ~1 sec tak lagatar wahi shabd — Max ki apni aawaz ki goonj se galti se na ruke (0.3 sec par galti se rukta
+        // tha aur baat bhatak jaati thi). Max khud abhi wo shabd bol raha ho (jaise apna naam "Max") to mat roko.
+        stopHits = if (word.isNotEmpty() && word == stopCandidate) stopHits + 1 else if (word.isNotEmpty()) 1 else 0
         stopCandidate = word
-        return confirmed
+        return stopHits >= 3 && !currentMaxText.lowercase().contains(word)
     }
 
     private fun interruptMax() {
         DebugLog.i("✋ Beech mein roka (user ne Max/stop bola)")
+        // Sirf chup — Google ko koi aawaz/signal nahi (pehle goonj bhej dete the aur wo "Nepal", "mausam" samajh ke bhatak jaata).
+        dropUntilTurnEnd = true
         clearPlayback()
         stopRecognizer?.reset()
         stopCandidate = ""
-        lastPlayedAt = 0L
-        // Google ko bata do user bol raha hai — wo apna jawab rok deta hai; aage ki baat VAD sambhalega.
-        speaking = true
-        speechPeak = -30.0
-        quietChunks = 0
-        speechStartedAt = SystemClock.elapsedRealtime()
-        sendActivity(start = true)
+        stopHits = 0
+        lastPlayedAt = SystemClock.elapsedRealtime()
         listener.onState(MaxState.Listening)
     }
 
