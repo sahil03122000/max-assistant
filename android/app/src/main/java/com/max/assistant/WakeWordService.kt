@@ -43,6 +43,7 @@ class WakeWordService : Service() {
         private const val SESSION_IDLE_MS = 3 * 60 * 1000L
         // Kitna pakka suna ho tab jaago (0..1). Galti se jaage to badhao, sune nahi to ghatao.
         const val WAKE_MEDIA_HOLD = "wake"
+        private const val LOCK_HOLD = "phone-locked"
         private const val PHRASE_MIN_CONF = 0.70
         private const val QUICK_MIN_CONF = 0.90
         private const val MEDIA_GREET_MIN_CONF = 0.50
@@ -81,8 +82,10 @@ class WakeWordService : Service() {
 
         /** App/notification par "Max abhi kya sun raha hai" — [MaxStatus]. */
         fun refreshStatus() {
+            val onlyLock = synchronized(holds) { holds == setOf(LOCK_HOLD) }
             val mode = when {
                 instance == null -> MaxStatus.Mode.OFF
+                onlyLock -> MaxStatus.Mode.LOCKED
                 isHeld -> MaxStatus.Mode.ACTIVE
                 sessionActive -> MaxStatus.Mode.CONVERSATION
                 else -> MaxStatus.Mode.WAKE_ONLY
@@ -222,6 +225,16 @@ class WakeWordService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
         )
         main.post(keepAlive)
+        // "Lock screen par Max" OFF ho to phone lock hote hi sunna band, khulte hi chalu.
+        registerReceiver(
+            lockReceiver,
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            },
+        )
+        applyLockRule()
         // Model pehli baar assets se phone storage mein copy hota hai (kuch second), phir load.
         StorageService.unpack(
             this, "vosk-model", "model",
@@ -249,7 +262,29 @@ class WakeWordService : Service() {
         return START_NOT_STICKY
     }
 
+    /** Lock screen par sunna allowed hai? (Android 14+ "full screen" ijazat = Settings ka "Lock screen par Max".) */
+    private fun lockScreenAllowed(): Boolean =
+        Build.VERSION.SDK_INT < 34 || getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+    private val lockReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = applyLockRule()
+    }
+
+    private fun applyLockRule() {
+        val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
+            !getSystemService(PowerManager::class.java).isInteractive
+        if (locked && !lockScreenAllowed()) {
+            if (synchronized(holds) { LOCK_HOLD !in holds }) DebugLog.i("🔒 Phone lock — Max chup (Lock screen par Max OFF)")
+            pause(LOCK_HOLD)
+        } else if (synchronized(holds) { LOCK_HOLD in holds }) {
+            DebugLog.i("🔓 Phone khula — 'Hello Max' sunna chalu")
+            resume(LOCK_HOLD)
+        }
+    }
+
     override fun onDestroy() {
+        runCatching { unregisterReceiver(lockReceiver) }
+        synchronized(holds) { holds -= LOCK_HOLD }
         instance = null
         refreshStatus()
         main.removeCallbacks(keepAlive)

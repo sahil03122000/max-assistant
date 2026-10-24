@@ -305,6 +305,7 @@ private fun ListeningCard(mode: MaxStatus.Mode, active: Boolean, onPower: (Boole
     val on = mode != MaxStatus.Mode.OFF
     val color = when (shown) {
         MaxStatus.Mode.OFF -> MaxTextDim
+        MaxStatus.Mode.LOCKED -> MaxTextDim
         MaxStatus.Mode.WAKE_ONLY -> MaxGreen
         MaxStatus.Mode.CONVERSATION -> MaxCyan
         MaxStatus.Mode.ACTIVE -> MaxPink

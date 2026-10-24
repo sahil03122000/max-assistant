@@ -185,6 +185,27 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "navigate_to",
+    description: "Google Maps mein raasta (navigation) shuru karo — 'Alwar jaana hai, maps laga do', 'ghar ka raasta dikhao'. Abhi ki jagah se destination tak.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        destination: { type: Type.STRING, description: "Kahan jaana hai, jaise 'Alwar' ya 'Rewari bus stand'" },
+        mode: { type: Type.STRING, enum: ["drive", "walk", "bike"], description: "Kaise jaana hai (default drive)" },
+      },
+      required: ["destination"],
+    },
+  },
+  {
+    name: "phone_action",
+    description: "Phone ke buttons jaisa kaam: home screen par jao, wapas (back), recent apps, notifications kholo, screen lock karo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { action: { type: Type.STRING, enum: ["home", "back", "recents", "notifications", "lock_screen"] } },
+      required: ["action"],
+    },
+  },
+  {
     name: "media_control",
     description:
       "Phone par chal rahe video/gaane (YouTube, Instagram, Spotify...) ko control karo: pause, play, next, previous, ya media volume.",

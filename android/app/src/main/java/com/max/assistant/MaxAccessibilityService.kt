@@ -45,6 +45,20 @@ class MaxAccessibilityService : AccessibilityService() {
     private var task: Job? = null
     private var hintView: TextView? = null
 
+    /**
+     * Max bol raha ho tab volume ka koi bhi button = "chup ho jao" (tez aawaz mein Max apna "Max/stop" sun nahi paata).
+     * Max chup ho to button ka normal kaam (volume) — kuch nahi badla.
+     */
+    override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+        val volume = event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP
+        if (!volume || !MaxController.isSpeaking()) return false
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            DebugLog.i("✋ Volume button se roka")
+            MaxController.stopSpeakingAll()
+        }
+        return true
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         DebugLog.init(this)

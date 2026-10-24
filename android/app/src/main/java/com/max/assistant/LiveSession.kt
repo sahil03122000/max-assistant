@@ -512,6 +512,11 @@ class LiveSession(
         return stopHits >= 3 && !currentMaxText.lowercase().contains(word)
     }
 
+    /** Bahar se rokna (volume button). */
+    fun userStop() {
+        if (isPlaying()) interruptMax()
+    }
+
     private fun interruptMax() {
         DebugLog.i("✋ Beech mein roka (user ne Max/stop bola)")
         // Sirf chup — Google ko koi aawaz/signal nahi (pehle goonj bhej dete the aur wo "Nepal", "mausam" samajh ke bhatak jaata).
@@ -700,7 +705,7 @@ class LiveSession(
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",
             "set_alarm", "set_timer", "set_reminder", "open_app", "play_on_youtube", "play_music", "media_control",
-            "open_camera", "unlock_phone", "web_search",
+            "open_camera", "unlock_phone", "web_search", "navigate_to", "phone_action",
         )
     }
 }

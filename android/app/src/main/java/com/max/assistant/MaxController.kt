@@ -158,6 +158,7 @@ class MaxController(
                 }
             }
         }
+        liveSession = session
         val result = try {
             session.run(profileJson(), command?.let { VoiceId.wavToPcm(it) }, firstInstruction, greetByModel = !localGreeting)
         } catch (e: CancellationException) {
@@ -168,6 +169,7 @@ class MaxController(
             listenAndHandle(inConversation = true)
             return
         }
+        liveSession = null
         micLevel = 0f
         // Google ki taraf se connection toota (baat beech mein) — ek baar khud dobara judo, baat yaad ke saath.
         if (result.broken && result.launches.isEmpty() && reconnects < 1) {
@@ -640,11 +642,15 @@ class MaxController(
 
     /** User ne Max ko bolte-bolte roka ("Max stop" ya "Ruko" button). */
     fun interrupt() {
+        liveSession?.userStop()
         if (state != MaxState.Speaking) return
         interrupted = true
         voicePlayer.stop()
         speaker.stop()
     }
+
+    /** Abhi chal raha Live session (volume button / rokne ke liye). */
+    @Volatile private var liveSession: LiveSession? = null
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? {
         // Pehle bola hua vaakya? Save ki hui aawaz — free limit bhi bachti hai aur turant bajta hai.
@@ -689,6 +695,14 @@ class MaxController(
          * ⏻ / "Sab band karo": har jagah chal rahi baat-cheet turant band (Live session, sunna, bolna) aur panel bhi.
          * Pehle sirf main screen wala rukta tha — panel ki Live baat-cheet chalti rehti aur Max sunta rehta.
          */
+        fun isSpeaking(): Boolean = synchronized(active) { active.any { it.state == MaxState.Speaking } }
+
+        /** Volume button: jo bhi Max bol raha hai use chup karo (baat-cheet chalti rahe). */
+        fun stopSpeakingAll() {
+            val all = synchronized(active) { active.toList() }
+            all.forEach { it.interrupt() }
+        }
+
         fun stopAll() {
             val all = synchronized(active) { active.toList() }
             all.forEach {

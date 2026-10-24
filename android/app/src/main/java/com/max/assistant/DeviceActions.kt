@@ -66,6 +66,8 @@ class DeviceActions(
             "play_on_youtube" -> playOnYouTube(args)
             "play_music" -> playMusic(args)
             "web_search" -> webSearch(args)
+            "navigate_to" -> navigateTo(args)
+            "phone_action" -> phoneAction(args)
             "media_control" -> mediaControl(args)
             "open_camera" -> openCamera(args)
             "unlock_phone" -> unlockPhone()
@@ -382,6 +384,38 @@ class DeviceActions(
         // Max abhi video roke hue hai — button tab dabao jab Max chup ho jaaye (warna focus chhodte hi video chal padti).
         if (MediaPause.isHolding()) MediaPause.keyAfterRelease = key else MediaPause.pressMediaKey(context, key)
         return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
+    }
+
+    /** Google Maps mein seedha raasta (navigation) — "Alwar jaana hai, maps laga do". */
+    private fun navigateTo(args: JSONObject): Outcome {
+        val dest = args.optString("destination").trim().ifEmpty { return Outcome(false, error = "Kahan jaana hai ye nahi mila") }
+        val mode = when (args.optString("mode")) {
+            "walk" -> "w"
+            "bike" -> "l"
+            else -> "d"
+        }
+        val maps = "com.google.android.apps.maps"
+        val intent = if (isInstalled(maps)) {
+            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${Uri.encode(dest)}&mode=$mode")).setPackage(maps)
+        } else {
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${Uri.encode(dest)}"))
+        }
+        return Outcome(true, result = "Google Maps mein $dest ka raasta shuru ho raha hai", launch = intent)
+    }
+
+    /** Home / back / recent apps / notifications / screen lock — Phone control (Accessibility) se. */
+    private fun phoneAction(args: JSONObject): Outcome {
+        val service = MaxAccessibilityService.instance
+            ?: return Outcome(false, error = "Ye karne ke liye Settings mein 'Phone control' ON karna hoga")
+        val (action, label) = when (args.optString("action")) {
+            "home" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME to "Home screen par aa gaye"
+            "back" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK to "Wapas chale gaye"
+            "recents" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS to "Recent apps khol diye"
+            "notifications" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS to "Notifications khol di"
+            "lock_screen" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN to "Screen lock kar di"
+            else -> return Outcome(false, error = "Ye phone action samajh nahi aaya")
+        }
+        return if (service.performGlobalAction(action)) Outcome(true, result = label) else Outcome(false, error = "Phone ne mana kar diya")
     }
 
     /**

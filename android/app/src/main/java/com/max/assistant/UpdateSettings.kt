@@ -153,7 +153,7 @@ fun LockScreenRow() {
         Column(Modifier.weight(1f)) {
             Text("🔒 Lock screen par Max", style = MaterialTheme.typography.labelLarge)
             Text(
-                if (allowed) "ON — phone lock ho tab bhi 'Hello Max' par jaagega" else "OFF — lock phone par Max ka panel nahi khulta",
+                if (allowed) "ON — phone lock ho tab bhi 'Hello Max' par jaagega" else "OFF — phone lock ho to Max bilkul nahi sunta",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
