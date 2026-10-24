@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
     private fun setWakeWord(enabled: Boolean) {
         controller.settings.wakeWord = enabled
         if (!enabled) {
+            MaxController.stopAll()
             WakeWordService.stop(this)
             return
         }

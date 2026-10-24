@@ -274,7 +274,12 @@ class MaxController(
         voicePlayer.stop()
     }
 
+    init {
+        synchronized(active) { active += this }
+    }
+
     fun destroy() {
+        synchronized(active) { active -= this }
         stop()
         speaker.shutdown()
         WakeWordService.resume(holdTag)
@@ -676,7 +681,23 @@ class MaxController(
 
     private val voiceCacheDir = File(activity.cacheDir, "voice").apply { mkdirs() }
 
-    private companion object {
+    companion object {
+        /** Abhi chal rahe saare Max (main app + "Hello Max" panel) — ⏻ sab ko ek saath band kare. */
+        private val active = mutableSetOf<MaxController>()
+
+        /**
+         * ⏻ / "Sab band karo": har jagah chal rahi baat-cheet turant band (Live session, sunna, bolna) aur panel bhi.
+         * Pehle sirf main screen wala rukta tha — panel ki Live baat-cheet chalti rehti aur Max sunta rehta.
+         */
+        fun stopAll() {
+            val all = synchronized(active) { active.toList() }
+            all.forEach {
+                it.stop()
+                it.onLaunch() // panel band (main app mein ye kuch nahi karta)
+            }
+            DebugLog.i("⏻ Sab band — ${all.size} jagah Max roka")
+        }
+
         // ---- Live mode ki chhoti yaad: har "Hello Max"/"Max" naya session hota hai, isliye "doosra chalao" par Max
         // ko pata hi nahi tha kya chal raha tha (Radha Rani bhajan ke baad English pop gaana chala diya). ----
         private const val MEMORY_MS = 15 * 60 * 1000L

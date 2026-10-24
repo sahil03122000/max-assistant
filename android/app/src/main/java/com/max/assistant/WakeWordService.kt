@@ -242,6 +242,7 @@ class WakeWordService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Settings(this).wakeWord = false
+            MaxController.stopAll()
             stopSelf()
         }
         // Android 14+ background se mic wali service restart nahi karne deta — app khulne par hi start hogi.
