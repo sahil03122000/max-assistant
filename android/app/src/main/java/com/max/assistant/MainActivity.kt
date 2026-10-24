@@ -674,6 +674,17 @@ private fun LogScreen(onClose: () -> Unit) {
                 })
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { SendLogsButton() }
+            // Pehle sirf is baar app khulne ke baad wali lines dikhti thi (update ke baad khaali) — ab poori aaj ki file.
+            var fileLines by remember { mutableStateOf<List<String>>(emptyList()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    fileLines = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { java.io.File(context.filesDir, "debug.log").readLines().takeLast(600).reversed() }
+                            .getOrDefault(DebugLog.lines.reversed())
+                    }
+                    delay(2_000)
+                }
+            }
             LazyColumn(
                 Modifier
                     .fillMaxSize()
@@ -681,7 +692,7 @@ private fun LogScreen(onClose: () -> Unit) {
                     .background(MaxSurface)
                     .padding(10.dp),
             ) {
-                items(DebugLog.lines) { line ->
+                items(fileLines) { line ->
                     Text(line, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = MaxTextDim, modifier = Modifier.padding(vertical = 2.dp))
                 }
             }

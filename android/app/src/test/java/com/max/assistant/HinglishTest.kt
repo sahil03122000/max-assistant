@@ -20,7 +20,7 @@ class HinglishTest {
     fun stopCommands() {
         listOf(
             "Max stop", "max stop", "stop", "Stop max", "band karo", "Max band karo", "bas", "bas karo",
-            "chup ho jao", "so jao", "bye", "ok bye", "Max stop. abhee vandate hain", "Max, stop, baad mein", "मैक्स स्टॉप", "बंद करो", "बस", "स्टॉप",
+            "chup ho jao", "so jao", "bye", "ok bye", "Max stop. abhee vandate hain", "Max, stop, baad mein", "Max by", "Max top", "मैक्स स्टॉप", "बंद करो", "बस", "स्टॉप",
         ).forEach { assertTrue("should stop: $it", SessionCommands.isStop(it)) }
     }
 

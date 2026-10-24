@@ -94,11 +94,13 @@ class MaxController(
             return it.random().replace("{naam}", name).replace(Regex(" +"), " ").trim()
         }
         val withName = if (name.isNotBlank()) " $name" else ""
+        // Pakka time ke hisaab se (pehle random tha — shaam ko bhi "Good evening" nahi aata tha).
         return when (java.time.LocalTime.now().hour) {
-            in 4..11 -> listOf("Good morning$withName, boliye", "Suprabhat$withName, kya karun?", "Haan ji$withName, boliye")
-            in 16..20 -> listOf("Good evening$withName, boliye", "Haan ji$withName, bataiye")
-            else -> listOf("Haan ji$withName, boliye", "Ji$withName?", "Boliye$withName")
-        }.random()
+            in 4..11 -> "Good morning$withName, boliye"
+            in 12..15 -> "Namaste$withName, boliye"
+            in 16..20 -> "Good evening$withName, boliye"
+            else -> "Haan ji$withName, boliye"
+        }
     }
 
     /** WhatsApp par jawab aaya — Max bataye aur poochhe reply karna hai? (OTP/card jaisi cheezein pehle chhupa do.) */
@@ -139,16 +141,24 @@ class MaxController(
         val localGreeting = command == null && firstInstruction == null
         if (localGreeting) {
             // Greeting atak jaaye to bhi mic hamesha ke liye band na rahe (pehle 30 sec kuch nahi suna gaya tha).
-            session.micMutedUntil = android.os.SystemClock.elapsedRealtime() + 5_000
+            session.micMutedUntil = android.os.SystemClock.elapsedRealtime() + 8_000
             scope.launch {
                 val text = liveGreeting(profiles.load().displayName)
                 DebugLog.i("👋 Greeting: $text")
                 addMessage(fromUser = false, text = text, saveToHistory = false)
                 try {
-                    val wav = if (settings.voice == Settings.PHONE_VOICE) null else withTimeoutOrNull(2_500) { fetchVoice(text, settings.voice) }
-                    withTimeoutOrNull(4_500) {
+                    // Internet se aawaz mangane mein der hoti thi — greeting der se bajti aur Max apni hi greeting ko
+                    // user ki baat samajh leta ("Main theek hoon bhai!"). Ab sirf saved aawaz, warna phone ki (turant);
+                    // natural aawaz peeche se save kar lo, agli baar wahi.
+                    val wav = if (settings.voice == Settings.PHONE_VOICE) null else cachedVoice(text, settings.voice)
+                    if (wav == null && settings.voice != Settings.PHONE_VOICE) scope.launch { runCatching { fetchVoice(text, settings.voice) } }
+                    withTimeoutOrNull(4_000) {
                         if (wav != null) voicePlayer.play(wav) else speaker.speak(text, settings.phoneVoice)
-                    } ?: DebugLog.i("Greeting atak gayi — chhod di")
+                    } ?: run {
+                        voicePlayer.stop()
+                        speaker.stop()
+                        DebugLog.i("Greeting atak gayi — rok di")
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -651,6 +661,11 @@ class MaxController(
 
     /** Abhi chal raha Live session (volume button / rokne ke liye). */
     @Volatile private var liveSession: LiveSession? = null
+
+    /** Sirf pehle se save aawaz (network nahi) — greeting jaisi cheez turant bajane ke liye. */
+    private suspend fun cachedVoice(text: String, voice: String): ByteArray? = withContext(Dispatchers.IO) {
+        File(voiceCacheDir, "${voice}_${text.trim().lowercase().hashCode()}.wav").takeIf { it.exists() }?.readBytes()
+    }
 
     private suspend fun fetchVoice(text: String, voice: String): ByteArray? {
         // Pehle bola hua vaakya? Save ki hui aawaz — free limit bhi bachti hai aur turant bajta hai.

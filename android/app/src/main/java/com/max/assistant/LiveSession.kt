@@ -458,7 +458,7 @@ class LiveSession(
                     if (halfDuplex && (isPlaying() || SystemClock.elapsedRealtime() - lastPlayedAt < ECHO_TAIL_MS)) {
                         // Is phone par Max ke bolte waqt mic Google ko nahi jaata — par phone khud (offline) "Max"/"stop"
                         // sunta rahe, taaki beech mein rokna kaam kare.
-                        if (isPlaying() && stopWordHeard(chunk)) interruptMax()
+                        if (isPlaying() && (stopWordHeard(chunk) || userTalkingOver(chunk))) interruptMax()
                         continue
                     }
                     if (toolRunning) continue
@@ -527,6 +527,50 @@ class LiveSession(
         stopHits = 0
         lastPlayedAt = SystemClock.elapsedRealtime()
         listener.onState(MaxState.Listening)
+    }
+
+    // ---------- Max ke bolte waqt user bol pada? (aawaz ki takat se) ----------
+    // Max ki tez aawaz mein "Max/stop" shabd pakadna mushkil tha. Phone jaanta hai Max kitni zor se bol raha hai —
+    // mic mein aam goonj se ~10 dB zyada aawaz lagatar 0.3 sec = user beech mein bol raha hai.
+
+    private val playEnvelope = java.util.concurrent.ConcurrentLinkedDeque<Pair<Long, Double>>()
+    private val echoDiffs = ArrayDeque<Double>()
+    private var overHits = 0
+
+    private fun userTalkingOver(chunk: ShortArray): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        // Speaker ki aawaz mic tak ~0.2-0.6 sec mein — us beech ki sabse tez Max ki aawaz.
+        val playDb = playEnvelope.filter { now - it.first in 0..700 }.maxOfOrNull { it.second } ?: return false
+        if (playDb < -60) return false
+        val micDb = rmsDb(chunk)
+        val diff = micDb - playDb
+        val baseline = if (echoDiffs.size >= 8) echoDiffs.sorted()[echoDiffs.size / 2] else null
+        val over = baseline != null && diff > baseline + BARGE_MARGIN_DB && micDb > -38
+        overHits = if (over) overHits + 1 else 0
+        if (!over) {
+            echoDiffs.addLast(diff) // aam goonj seekhte raho
+            while (echoDiffs.size > 60) echoDiffs.removeFirst()
+        }
+        if (overHits >= 3) {
+            DebugLog.i("✋ Aawaz se roka: mic ${"%.0f".format(micDb)} dB, goonj se ${"%.0f".format(diff - (baseline ?: 0.0))} dB zyada")
+            overHits = 0
+            return true
+        }
+        return false
+    }
+
+    private fun pcmBytesDb(bytes: ByteArray): Double {
+        var sum = 0.0
+        var n = 0
+        var i = 0
+        while (i + 1 < bytes.size) {
+            val s = ((bytes[i].toInt() and 0xff) or (bytes[i + 1].toInt() shl 8)).toShort().toDouble()
+            sum += s * s
+            n++
+            i += 2
+        }
+        val rms = sqrt(sum / n.coerceAtLeast(1))
+        return if (rms < 1) -100.0 else 20 * log10(rms / 32768.0)
     }
 
     // ---------- Baat shuru / khatam (phone khud tay karta hai) ----------
@@ -664,6 +708,8 @@ class LiveSession(
     private suspend fun playLoop() {
         for (bytes in playback) {
             listener.onState(MaxState.Speaking)
+            playEnvelope.addLast(SystemClock.elapsedRealtime() to pcmBytesDb(bytes))
+            while (playEnvelope.size > 40) playEnvelope.removeFirst()
             lastPlayedAt = SystemClock.elapsedRealtime()
             synchronized(trackLock) {
                 val t = track ?: return
@@ -699,6 +745,7 @@ class LiveSession(
         const val OUT_RATE = 24000
         const val CHUNK = 1600 // 0.1 sec
         const val IDLE_NUDGE_MS = 15_000L
+        const val BARGE_MARGIN_DB = 10.0
         const val STOP_GRAMMAR = """["max", "stop", "ruko", "[unk]"]"""
         const val IDLE_END_MS = 15_000L
         const val ECHO_TAIL_MS = 900L

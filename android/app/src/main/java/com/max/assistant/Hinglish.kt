@@ -22,7 +22,7 @@ object SessionCommands {
     )
 
     /** "Max stop, abhi baad mein..." — "Max stop" se shuru ho to baaki baat kuch bhi ho, rukna hai. */
-    private val STOP_PREFIX = Regex("""^(?:max|maks|maiks|meks)[,.!\s]+(?:stop|band\s*karo|chup)\b""", RegexOption.IGNORE_CASE)
+    private val STOP_PREFIX = Regex("""^(?:max|maks|maiks|meks)[,.!\s]+(?:stop|top|stap|band\s*karo|chup|bye|by|bai)\b""", RegexOption.IGNORE_CASE)
 
     fun isStop(text: String): Boolean {
         val t = Hinglish.romanize(text).trim()

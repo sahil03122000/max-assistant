@@ -274,7 +274,11 @@ class WakeWordService : Service() {
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(PowerManager::class.java).isInteractive
         if (locked && !lockScreenAllowed()) {
-            if (synchronized(holds) { LOCK_HOLD !in holds }) DebugLog.i("🔒 Phone lock — Max chup (Lock screen par Max OFF)")
+            if (synchronized(holds) { LOCK_HOLD !in holds }) {
+                DebugLog.i("🔒 Phone lock — Max chup (Lock screen par Max OFF)")
+                // Chal rahi Live baat-cheet bhi band — warna lock phone mein shor sun ke khud gaana chalane lagta tha.
+                MaxController.stopAll()
+            }
             pause(LOCK_HOLD)
         } else if (synchronized(holds) { LOCK_HOLD in holds }) {
             DebugLog.i("🔓 Phone khula — 'Hello Max' sunna chalu")
