@@ -193,6 +193,13 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "whatsapp_read",
+    description:
+      "WhatsApp par aaye NAYE message padho (Max ke chalte notification se) — 'X ka reply aaya kya?', 'kisi ka message aaya?'. " +
+      "chat khaali = kis-kis ke message aaye. Purane padhe hue message ye nahi dekh sakta.",
+    parameters: { type: Type.OBJECT, properties: { chat: { type: Type.STRING, description: "Kiska (naam), ya khaali" } } },
+  },
+  {
     name: "navigate_to",
     description: "Google Maps mein raasta (navigation) shuru karo — 'Alwar jaana hai, maps laga do', 'ghar ka raasta dikhao'. Abhi ki jagah se destination tak.",
     parameters: {

@@ -779,7 +779,7 @@ class LiveSession(
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",
             "set_alarm", "set_timer", "set_reminder", "open_app", "play_on_youtube", "play_music", "media_control",
-            "open_camera", "unlock_phone", "web_search", "navigate_to", "phone_action",
+            "open_camera", "unlock_phone", "web_search", "navigate_to", "phone_action", "whatsapp_read",
         )
     }
 }

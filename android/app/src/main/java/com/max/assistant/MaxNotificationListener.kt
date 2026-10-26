@@ -30,8 +30,10 @@ class MaxNotificationListener : NotificationListenerService() {
         val chat = (extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) ?: extras.getCharSequence(Notification.EXTRA_TITLE))
             ?.toString()?.trim()?.removeSuffix(":")?.replace(Regex("""\s*\(\d+ (new )?messages?\)$"""), "")
             ?: return
-        val watched = WhatsAppWatch.match(this, chat) ?: return
         val text = latestText(extras)?.trim()?.takeIf { it.isNotEmpty() && !SUMMARY.matches(it) } ?: return
+        // "Reply aaya kya?" ke liye — sirf memory mein (kahin save nahi).
+        WhatsAppInbox.add(chat, text)
+        val watched = WhatsAppWatch.match(this, chat) ?: return
         // WhatsApp ek hi message ke liye notification baar-baar update karta hai.
         if (lastSeen[watched] == text) return
         lastSeen[watched] = text

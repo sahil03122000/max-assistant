@@ -67,6 +67,7 @@ class DeviceActions(
             "play_on_youtube" -> playOnYouTube(args)
             "play_music" -> playMusic(args)
             "web_search" -> webSearch(args)
+            "whatsapp_read" -> whatsAppRead(args)
             "navigate_to" -> navigateTo(args)
             "phone_action" -> phoneAction(args)
             "media_control" -> mediaControl(args)
@@ -106,7 +107,11 @@ class DeviceActions(
             ?: return Outcome(false, error = "Phone control OFF hai — iski jagah send_whatsapp use karo (user ko Send khud dabana hoga)")
         val (pkg, problem) = whatsAppPackage(args)
         problem?.let { return it }
-        val query = args.optString("name").trim().ifEmpty { return Outcome(false, error = "Kisko dhundhna hai, naam nahi mila") }
+        val spoken = args.optString("name").trim().ifEmpty { return Outcome(false, error = "Kisko dhundhna hai, naam nahi mila") }
+        // Bola gaya naam ("Chinna") → phone contacts ka asli naam ("Cheena") — WhatsApp mein wahi save hota hai.
+        val query = runCatching {
+            NameMatcher.match(spoken, loadContacts().map { it.name }.distinct()).singleOrNull()
+        }.getOrNull() ?: spoken
         // User hamesha wala WhatsApp (Settings) — har baar "normal ya clone?" na poochhe.
         val option = args.optString("which_whatsapp").ifBlank { Settings(context).whatsAppChoice }
         val result = try {
@@ -142,6 +147,7 @@ class DeviceActions(
         "whatsapp_send" -> "💬 ${args.optString("chat")} ko bhej raha hoon…"
         "send_sms" -> "✉️ SMS: ${args.optString("contact_name")}"
         "web_search" -> "🔎 Internet par dhundh raha hoon: ${args.optString("query")}"
+        "whatsapp_read" -> "💬 WhatsApp ke naye message dekh raha hoon"
         "navigate_to" -> "🗺️ Raasta: ${args.optString("destination")}"
         "play_on_youtube" -> "▶️ YouTube: ${args.optString("video_title").ifBlank { args.optString("query") }}"
         "play_music" -> "🎵 ${args.optString("query")}"
@@ -455,6 +461,33 @@ class DeviceActions(
                 "agar koi video khuli hi nahi thi to nahi chalega; tab user ko batao ki purani video main seedha nahi chala sakta, " +
                 "naam batayein to YouTube par chala dunga.",
         )
+    }
+
+    /** WhatsApp par aaye naye message (notification se, Max ke chalte) — "Cheena ka reply aaya kya?". */
+    private fun whatsAppRead(args: JSONObject): Outcome {
+        val enabled = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        if (!enabled) return Outcome(false, error = "Iske liye Settings mein '🔔 WhatsApp jawab sunao' ON karna hoga")
+        val asked = args.optString("chat").trim()
+        if (asked.isEmpty()) {
+            val who = WhatsAppInbox.recentChats()
+            return Outcome(
+                true,
+                result = if (who.isEmpty()) "Pichhle 24 ghante mein (jab se Max chal raha hai) WhatsApp par koi naya message nahi aaya."
+                else "In logon ke naye WhatsApp message aaye (naya pehle): ${who.take(8).joinToString()}. User ko batao, poocho kiska sunna hai.",
+            )
+        }
+        val spoken = runCatching { NameMatcher.match(asked, loadContacts().map { it.name }.distinct()).singleOrNull() }.getOrNull() ?: asked
+        val (name, msgs) = WhatsAppInbox.read(spoken)
+        if (name == null || msgs.isEmpty()) {
+            return Outcome(
+                true,
+                result = "'$asked' ka koi naya WhatsApp message nahi aaya (Max sirf wahi dekh sakta hai jo uske chalte notification mein aaye; " +
+                    "purane padhe hue message nahi). User ko saaf batao.",
+            )
+        }
+        val fmt = java.text.SimpleDateFormat("h:mm a", java.util.Locale.ENGLISH)
+        val text = PrivacyFilter.apply(msgs.takeLast(5).joinToString(" | ") { (t, m) -> "${fmt.format(java.util.Date(t))}: $m" }).text
+        return Outcome(true, result = "$name ke naye WhatsApp message: $text. User ko chhota sa batao kisne kya likha, poocho reply karna hai?")
     }
 
     /** Google Maps mein seedha raasta (navigation) — "Alwar jaana hai, maps laga do". */
