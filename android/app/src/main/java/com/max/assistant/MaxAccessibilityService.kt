@@ -299,6 +299,18 @@ class MaxAccessibilityService : AccessibilityService() {
         view.text = text
     }
 
+    private val hintHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideHintRunnable = Runnable { hideHint() }
+
+    /** Kuch der ke liye chhoti line (jaise "📞 Mummy Ji ko call…") — user ko dikhe Max kya kar raha hai. */
+    fun showStatus(text: String, ms: Long = 4_000) {
+        hintHandler.post {
+            showHint(text)
+            hintHandler.removeCallbacks(hideHintRunnable)
+            hintHandler.postDelayed(hideHintRunnable, ms)
+        }
+    }
+
     fun hideHint() {
         hintView?.let { runCatching { getSystemService(WindowManager::class.java).removeView(it) } }
         hintView = null

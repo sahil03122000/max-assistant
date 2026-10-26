@@ -26,7 +26,15 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
   {
     name: "call_contact",
     description: "Phone se kisi contact ko call lagao.",
-    parameters: { type: Type.OBJECT, properties: { contact_name: contactName, exact_name: exactName }, required: ["contact_name"] },
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        contact_name: contactName,
+        exact_name: exactName,
+        sim: { type: Type.NUMBER, description: "Sirf jab phone ne do SIM bataye aur user ne chuna: 1 ya 2 (yaad rehta hai)" },
+      },
+      required: ["contact_name"],
+    },
   },
   {
     name: "call_and_talk",

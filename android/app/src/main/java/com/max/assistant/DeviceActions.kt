@@ -52,6 +52,7 @@ class DeviceActions(
         // Live mode ka AI kabhi naam/message Hindi lipi mein deta hai ("चीना") — WhatsApp/contacts mein Roman mein
         // save hote hain aur user ko Roman Hinglish hi chahiye. Sab text Roman mein badlo.
         val args = romanizeArgs(action.args)
+        statusFor(action.name, args)?.let { MaxAccessibilityService.instance?.showStatus(it) }
         when (action.name) {
             "whatsapp_search" -> whatsAppSearch(args)
             "whatsapp_send" -> whatsAppSend(args)
@@ -134,6 +135,23 @@ class DeviceActions(
         }
     }
 
+    /** Har kaam par screen par chhoti line — user ko dikhe Max kya kar raha hai aur kahan se dekh raha hai. */
+    private fun statusFor(name: String, args: JSONObject): String? = when (name) {
+        "call_contact" -> "📞 Contacts mein dhundh raha hoon: ${args.optString("contact_name")}"
+        "whatsapp_search" -> "💬 WhatsApp mein dhundh raha hoon: ${args.optString("name")}"
+        "whatsapp_send" -> "💬 ${args.optString("chat")} ko bhej raha hoon…"
+        "send_sms" -> "✉️ SMS: ${args.optString("contact_name")}"
+        "web_search" -> "🔎 Internet par dhundh raha hoon: ${args.optString("query")}"
+        "navigate_to" -> "🗺️ Raasta: ${args.optString("destination")}"
+        "play_on_youtube" -> "▶️ YouTube: ${args.optString("video_title").ifBlank { args.optString("query") }}"
+        "play_music" -> "🎵 ${args.optString("query")}"
+        "set_alarm" -> "⏰ Alarm laga raha hoon"
+        "set_timer" -> "⏱️ Timer laga raha hoon"
+        "set_reminder" -> "📝 Reminder laga raha hoon"
+        "open_app" -> "📱 ${args.optString("app_name")} khol raha hoon"
+        else -> null
+    }
+
     private fun romanizeArgs(args: JSONObject): JSONObject {
         val out = JSONObject(args.toString())
         for (key in args.keys()) {
@@ -180,8 +198,45 @@ class DeviceActions(
         requirePermission(Manifest.permission.CALL_PHONE, "Call karne ki permission nahi di gayi hai")
         return withContact(args) { c ->
             val intent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", c.number, null))
+            // Do SIM: phone "kaunse SIM se?" poochhta tha aur Max ka panel band hote hi call ruk jaati thi.
+            when (val sim = chooseSim(args.optInt("sim", 0))) {
+                is SimChoice.Ask -> return@withContact Outcome(
+                    false,
+                    error = "Phone mein do SIM hain: ${sim.labels.mapIndexed { i, l -> "SIM ${i + 1} ($l)" }.joinToString(", ")}. " +
+                        "User se poocho kaunse SIM se call karun, phir call_contact ko sim=1 ya sim=2 ke saath dobara bhejo " +
+                        "(contact_name '${c.name}', exact_name=true). Ye choice aage ke liye yaad rahegi.",
+                )
+                is SimChoice.Use -> intent.putExtra(android.telecom.TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, sim.handle)
+                SimChoice.Default -> Unit
+            }
+            MaxAccessibilityService.instance?.showStatus("📞 ${c.name} ko call… (…${c.number.filter(Char::isDigit).takeLast(4)})")
             Outcome(true, result = "${c.name} ko call lag rahi hai", launch = intent)
         }
+    }
+
+    private sealed class SimChoice {
+        object Default : SimChoice()
+        class Use(val handle: android.telecom.PhoneAccountHandle) : SimChoice()
+        class Ask(val labels: List<String>) : SimChoice()
+    }
+
+    /** [asked]: user ne abhi bataya (1/2) — yaad rakho. Ek hi SIM ho ya ijazat na ho to phone ka apna tareeka. */
+    private fun chooseSim(asked: Int): SimChoice {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return SimChoice.Default
+        val telecom = context.getSystemService(android.telecom.TelecomManager::class.java)
+        val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrNull().orEmpty()
+        if (accounts.size < 2) return SimChoice.Default
+        val settings = Settings(context)
+        if (asked in 1..accounts.size) {
+            val handle = accounts[asked - 1]
+            settings.callSim = handle.id
+            return SimChoice.Use(handle)
+        }
+        accounts.firstOrNull { it.id == settings.callSim }?.let { return SimChoice.Use(it) }
+        val labels = accounts.map { h -> runCatching { telecom.getPhoneAccount(h)?.label?.toString() }.getOrNull() ?: "SIM" }
+        return SimChoice.Ask(labels)
     }
 
     private suspend fun callAndTalk(args: JSONObject): Outcome {
@@ -271,12 +326,23 @@ class DeviceActions(
             }
             // Alag naam par number ek hi ("Cheena", "Chenna" = ek insaan) — poochhna bekaar, seedha.
             matches.map { it.number.filter(Char::isDigit).takeLast(10) }.distinct().size == 1 -> block(matches.first())
-            names.size > 1 -> Outcome(
-                false,
-                error = "'$query' se ${names.size} contacts mile: ${names.take(5).joinToString()}. " +
-                    "Kuch mat karo — pehle user se poocho kaunsa (jaise '${names.take(2).joinToString(" ya ")}, kisko?'). " +
-                    "Jawab aane par wahi poora naam contact_name mein aur exact_name=true bhejo.",
-            )
+            names.size > 1 -> {
+                // Screen par numbered list — user dekh ke "1 number wala" / "pehla" / poora naam bole.
+                val list = matches.distinctBy { it.name }.take(5)
+                MaxAccessibilityService.instance?.showStatus(
+                    "📞 Kisko? (bolo: 1, 2… ya naam)\n" + list.mapIndexed { i, ct ->
+                        "${i + 1}. ${ct.name}   …${ct.number.filter(Char::isDigit).takeLast(4)}"
+                    }.joinToString("\n"),
+                    ms = 25_000,
+                )
+                Outcome(
+                    false,
+                    error = "'$query' se ${names.size} contacts mile, screen par numbered list dikha di hai: " +
+                        list.mapIndexed { i, ct -> "${i + 1}. ${ct.name}" }.joinToString(", ") + ". " +
+                        "User se poocho kaunsa (number ya naam). User '1 number'/'pehla'/'doosra' bole to us number wala naam lo. " +
+                        "Phir wahi poora naam contact_name mein aur exact_name=true bhejo.",
+                )
+            }
             else -> block(matches.first())
         }
     }
@@ -383,7 +449,12 @@ class DeviceActions(
         }
         // Max abhi video roke hue hai — button tab dabao jab Max chup ho jaaye (warna focus chhodte hi video chal padti).
         if (MediaPause.isHolding()) MediaPause.keyAfterRelease = key else MediaPause.pressMediaKey(context, key)
-        return Outcome(true, result = "Ho jaayega (Max ke bolne ke baad)")
+        return Outcome(
+            true,
+            result = "Button daba diya (Max ke bolne ke baad). Ye sirf pehle se chal rahi/ruki video-gaane par kaam karta hai — " +
+                "agar koi video khuli hi nahi thi to nahi chalega; tab user ko batao ki purani video main seedha nahi chala sakta, " +
+                "naam batayein to YouTube par chala dunga.",
+        )
     }
 
     /** Google Maps mein seedha raasta (navigation) — "Alwar jaana hai, maps laga do". */

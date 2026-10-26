@@ -698,7 +698,8 @@ class LiveSession(
                 AudioFormat.Builder().setSampleRate(OUT_RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build(),
             )
-            .setBufferSizeInBytes(maxOf(min, OUT_RATE / 5 * 2))
+            // Bada buffer (1.5 sec) — Google se aawaz kabhi der se aati hai; chhote buffer mein aawaz atak-atak ke aati thi.
+            .setBufferSizeInBytes(maxOf(min, OUT_RATE * 2 * 3 / 2))
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
             .also { it.play() }
@@ -707,6 +708,26 @@ class LiveSession(
 
     private suspend fun playLoop() {
         for (bytes in playback) {
+            // Naye jawab ki shuruaat: ~0.35 sec jama karke bajao (beech mein network ruka to bhi aawaz na toote).
+            if (!isPlaying()) {
+                var pending = bytes
+                val until = SystemClock.elapsedRealtime() + 600
+                while (pending.size < OUT_RATE * 2 * 35 / 100 && SystemClock.elapsedRealtime() < until) {
+                    val more = withTimeoutOrNull(120) { playback.receiveCatching().getOrNull() } ?: continue
+                    pending += more
+                }
+                if (pending !== bytes) {
+                    listener.onState(MaxState.Speaking)
+                    playEnvelope.addLast(SystemClock.elapsedRealtime() to pcmBytesDb(pending))
+                    synchronized(trackLock) {
+                        val t = track ?: return
+                        t.write(pending, 0, pending.size)
+                        framesWritten += pending.size / 2
+                    }
+                    lastPlayedAt = SystemClock.elapsedRealtime()
+                    continue
+                }
+            }
             listener.onState(MaxState.Speaking)
             playEnvelope.addLast(SystemClock.elapsedRealtime() to pcmBytesDb(bytes))
             while (playEnvelope.size > 40) playEnvelope.removeFirst()
@@ -732,7 +753,9 @@ class LiveSession(
 
     private fun isPlaying(): Boolean {
         val t = track ?: return false
-        val playing = t.playbackHeadPosition.toLong() and 0xffffffffL < framesWritten
+        // Band hote waqt track release ho chuka ho to crash ("AudioTrack pointer") — tab "nahi baj raha".
+        val head = runCatching { t.playbackHeadPosition.toLong() and 0xffffffffL }.getOrNull() ?: return false
+        val playing = head < framesWritten
         if (playing) lastPlayedAt = SystemClock.elapsedRealtime()
         return playing
     }

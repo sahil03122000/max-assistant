@@ -87,6 +87,7 @@ class MaxController(
     private fun isLive() = settings.listenEngine == Settings.ENGINE_LIVE
 
     private var reconnects = 0
+    @Volatile private var stoppedByUser = false
 
     /** User ki apni greeting (Settings) ya time ke hisaab se: subah "Good morning", shaam "Good evening". */
     private fun liveGreeting(name: String): String {
@@ -174,6 +175,10 @@ class MaxController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (stoppedByUser || MaxStatus.mode == MaxStatus.Mode.OFF || MaxStatus.mode == MaxStatus.Mode.LOCKED) {
+                DebugLog.i("Live band (user/lock) — chup")
+                return
+            }
             DebugLog.e("Live mode nahi chala — purana tareeka", e)
             say("Live mode abhi nahi chal paaya, purane tareeke se sunta hoon.")
             listenAndHandle(inConversation = true)
@@ -721,6 +726,7 @@ class MaxController(
         fun stopAll() {
             val all = synchronized(active) { active.toList() }
             all.forEach {
+                it.stoppedByUser = true
                 it.stop()
                 it.onLaunch() // panel band (main app mein ye kuch nahi karta)
             }

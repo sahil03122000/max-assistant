@@ -176,6 +176,7 @@ class MainActivity : ComponentActivity() {
             add(Manifest.permission.RECORD_AUDIO)
             add(Manifest.permission.READ_CONTACTS)
             add(Manifest.permission.CALL_PHONE)
+            add(Manifest.permission.READ_PHONE_STATE)
             if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())

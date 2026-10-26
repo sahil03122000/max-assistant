@@ -41,6 +41,11 @@ class Settings(context: Context) {
         get() = prefs.getString("greetings", null).orEmpty()
         set(value) = prefs.edit { putString("greetings", value) }
 
+    /** Call kis SIM se: "" = abhi tay nahi (pehli baar poochho), warna PhoneAccount ka id. */
+    var callSim: String
+        get() = prefs.getString("call_sim", null).orEmpty()
+        set(value) = prefs.edit { putString("call_sim", value) }
+
     var wakeWord: Boolean
         get() = prefs.getBoolean("wake_word", false)
         set(value) = prefs.edit { putBoolean("wake_word", value) }
