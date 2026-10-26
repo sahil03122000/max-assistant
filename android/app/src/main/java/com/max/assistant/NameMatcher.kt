@@ -103,6 +103,12 @@ object NameMatcher {
         if (qs.length >= 2) names.filter { skeleton(it) == qs }.takeIf { it.isNotEmpty() }?.let { return it }
         val qShape = shape(query)
         if (qShape.length >= 3) names.filter { shape(it) == qShape }.takeIf { it.isNotEmpty() }?.let { return it }
+        // Naam ka koi ek shabd aawaz mein mile — "mammee"/"मम्मी" → "Mummy Ji", "Jitesh Mummy" (pehle poora naam
+        // ek saath milate the, "Ji" ki wajah se "Mummy Ji" nahi milta tha aur Max kehta "contact nahi mila").
+        if (qShape.length >= 3) {
+            names.filter { name -> toLatin(name).split(Regex("\\s+")).any { shape(it) == qShape } }
+                .takeIf { it.isNotEmpty() }?.let { return it }
+        }
         return names.filter { similarity(query, it) >= 0.8 }
     }
 

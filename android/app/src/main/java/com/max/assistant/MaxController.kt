@@ -153,12 +153,16 @@ class MaxController(
                     // natural aawaz peeche se save kar lo, agli baar wahi.
                     val wav = if (settings.voice == Settings.PHONE_VOICE) null else cachedVoice(text, settings.voice)
                     if (wav == null && settings.voice != Settings.PHONE_VOICE) scope.launch { runCatching { fetchVoice(text, settings.voice) } }
-                    withTimeoutOrNull(4_000) {
-                        if (wav != null) voicePlayer.play(wav) else speaker.speak(text, settings.phoneVoice)
-                    } ?: run {
-                        voicePlayer.stop()
-                        speaker.stop()
-                        DebugLog.i("Greeting atak gayi — rok di")
+                    if (wav != null) {
+                        withTimeoutOrNull(4_000) { voicePlayer.play(wav) } ?: run {
+                            voicePlayer.stop()
+                            DebugLog.i("Greeting atak gayi — rok di")
+                        }
+                    } else {
+                        // Pehli baar is greeting ki aawaz saved nahi — phone ki aawaz shuru hone mein der lagti thi aur
+                        // uski goonj Google tak jaati (Max khud se time batane laga). Abhi bas beep; aawaz agli baar.
+                        beepNow()
+                        DebugLog.i("Greeting ki aawaz abhi saved nahi — beep (agli baar aawaz)")
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -293,6 +297,14 @@ class MaxController(
 
     init {
         synchronized(active) { active += this }
+        // Saari greetings (subah/dopahar/shaam/raat) ki aawaz pehle se save — "Hello Max" par turant baje.
+        if (settings.voice != Settings.PHONE_VOICE) scope.launch(Dispatchers.IO) {
+            val name = profiles.load().displayName
+            val withName = if (name.isNotBlank()) " $name" else ""
+            val all = settings.greetings.split(";", "\n").map { it.trim().replace("{naam}", name) }.filter { it.isNotEmpty() } +
+                listOf("Good morning$withName, boliye", "Namaste$withName, boliye", "Good evening$withName, boliye", "Haan ji$withName, boliye")
+            for (g in all) if (cachedVoice(g, settings.voice) == null) runCatching { fetchVoice(g, settings.voice) }
+        }
     }
 
     fun destroy() {
