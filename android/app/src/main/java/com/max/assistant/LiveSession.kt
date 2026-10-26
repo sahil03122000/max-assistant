@@ -279,6 +279,7 @@ class LiveSession(
                     currentMaxText = maxText.toString()
                 }
                 content.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
+                    generating = true
                     flushUser(userText).also { userText = StringBuilder() }
                     for (i in 0 until parts.length()) {
                         val data = parts.getJSONObject(i).optJSONObject("inlineData")?.optString("data") ?: continue
@@ -297,6 +298,7 @@ class LiveSession(
                 }
                 if (content.optBoolean("turnComplete")) {
                     dropUntilTurnEnd = false
+                    generating = false
                     listener.onState(MaxState.Listening)
                     if (farewellSent) farewellDone = true
                     flushUser(userText).also { userText = StringBuilder() }
@@ -495,6 +497,8 @@ class LiveSession(
     private var stopHits = 0
     /** User ne roka — is jawab ki baaki aawaz phenko (Google ko nahi pata, wo bhejta rahega). */
     @Volatile private var dropUntilTurnEnd = false
+    /** Google abhi jawab bhej raha hai (modelTurn aaya, turnComplete nahi). */
+    @Volatile private var generating = false
 
     private fun stopWordHeard(chunk: ShortArray): Boolean {
         val model = WakeWordService.sharedModel ?: return false
@@ -520,7 +524,8 @@ class LiveSession(
     private fun interruptMax() {
         DebugLog.i("✋ Beech mein roka (user ne Max/stop bola)")
         // Sirf chup — Google ko koi aawaz/signal nahi (pehle goonj bhej dete the aur wo "Nepal", "mausam" samajh ke bhatak jaata).
-        dropUntilTurnEnd = true
+        // Baaki aawaz tabhi phenko jab Google abhi bhi yahi jawab bhej raha ho — warna agla jawab bhi phenk dete the.
+        dropUntilTurnEnd = generating
         clearPlayback()
         stopRecognizer?.reset()
         stopCandidate = ""
