@@ -538,6 +538,9 @@ class LiveSession(
     private var overHits = 0
 
     private fun userTalkingOver(chunk: ShortArray): Boolean {
+        // Band (v101 test): halke shor par bhi har 5-10 sec Max ko kaat deta tha — jawab atak-atak ke aate the.
+        // Rokne ke liye volume button + "Max/stop/ruko" shabd kaafi. Wapas chalana ho to ENERGY_BARGE = true.
+        if (!ENERGY_BARGE) return false
         val now = SystemClock.elapsedRealtime()
         // Speaker ki aawaz mic tak ~0.2-0.6 sec mein — us beech ki sabse tez Max ki aawaz.
         val playDb = playEnvelope.filter { now - it.first in 0..700 }.maxOfOrNull { it.second } ?: return false
@@ -769,6 +772,7 @@ class LiveSession(
         const val CHUNK = 1600 // 0.1 sec
         const val IDLE_NUDGE_MS = 15_000L
         const val BARGE_MARGIN_DB = 10.0
+        const val ENERGY_BARGE = false
         const val STOP_GRAMMAR = """["max", "stop", "ruko", "[unk]"]"""
         const val IDLE_END_MS = 15_000L
         const val ECHO_TAIL_MS = 900L
