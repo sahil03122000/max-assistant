@@ -508,7 +508,8 @@ class LiveSession(
         rec.acceptWaveForm(chunk, chunk.size)
         if (++stopChunks % 3 != 0) return false
         val partial = runCatching { JSONObject(rec.partialResult).optString("partial") }.getOrDefault("")
-        val word = partial.split(" ").lastOrNull { it == "max" || it == "stop" || it == "ruko" }.orEmpty()
+        // "max" hataya — ghar ki baaton/Max ki apni aawaz mein bahut aata tha aur Max galti se ruk jaata. Volume button pakka hai.
+        val word = partial.split(" ").lastOrNull { it == "stop" || it == "ruko" }.orEmpty()
         // ~1 sec tak lagatar wahi shabd — Max ki apni aawaz ki goonj se galti se na ruke (0.3 sec par galti se rukta
         // tha aur baat bhatak jaati thi). Max khud abhi wo shabd bol raha ho (jaise apna naam "Max") to mat roko.
         stopHits = if (word.isNotEmpty() && word == stopCandidate) stopHits + 1 else if (word.isNotEmpty()) 1 else 0
@@ -602,8 +603,10 @@ class LiveSession(
             while (noiseWindow.size > 30) noiseWindow.removeFirst() // ~3 sec
             preRoll.addLast(chunk)
             while (preRoll.size > 4) preRoll.removeFirst()
-            loudChunks = if (db > maxOf(noise + 9, -48.0)) loudChunks + 1 else 0
-            if (loudChunks >= 3) {
+            // Phone ke paas se saaf aawaz hi "user bol raha hai" — ghar walon/TV ki door ki baatein (Korean/Spanish
+            // jaisi galat lines ban ke) Max ko bhatka deti thi. Pehle noise+9 dB, 0.3 sec; ab noise+12 dB aur -40 dB se upar, 0.4 sec.
+            loudChunks = if (db > maxOf(noise + 12, -40.0)) loudChunks + 1 else 0
+            if (loudChunks >= 4) {
                 speaking = true
                 speechPeak = db
                 quietChunks = 0
@@ -778,7 +781,7 @@ class LiveSession(
         const val IDLE_NUDGE_MS = 15_000L
         const val BARGE_MARGIN_DB = 10.0
         const val ENERGY_BARGE = false
-        const val STOP_GRAMMAR = """["max", "stop", "ruko", "[unk]"]"""
+        const val STOP_GRAMMAR = """["stop", "ruko", "[unk]"]"""
         const val IDLE_END_MS = 15_000L
         const val ECHO_TAIL_MS = 900L
         val DEVICE_TOOLS = setOf(
