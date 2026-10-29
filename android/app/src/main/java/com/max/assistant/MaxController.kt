@@ -99,7 +99,7 @@ class MaxController(
         return when (java.time.LocalTime.now().hour) {
             in 4..11 -> "Good morning$withName, boliye"
             in 12..15 -> "Namaste$withName, boliye"
-            in 16..20 -> "Good evening$withName, boliye"
+            in 16..21 -> "Good evening$withName, boliye"
             else -> "Haan ji$withName, boliye"
         }
     }

@@ -631,7 +631,7 @@ class LiveSession(
     /** User ki baat khatam: Google ko batao, "tik" bajao, orb "soch raha hoon". */
     private fun endOfUserTurn() {
         sendActivity(start = false)
-        lastActivityAt = SystemClock.elapsedRealtime()
+        // lastActivityAt yahan nahi — asli baat (Google ka likha hua) par hi; warna reels/TV ki aawaz se Max kabhi band nahi hota tha.
         micMutedUntil = SystemClock.elapsedRealtime() + 350 // "tik" khud na suna jaaye
         runCatching { tick.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 90) }
         listener.onState(MaxState.Thinking)
@@ -787,7 +787,7 @@ class LiveSession(
         val DEVICE_TOOLS = setOf(
             "whatsapp_search", "whatsapp_send", "call_contact", "call_and_talk", "send_sms", "send_whatsapp",
             "set_alarm", "set_timer", "set_reminder", "open_app", "play_on_youtube", "play_music", "media_control",
-            "open_camera", "unlock_phone", "web_search", "navigate_to", "phone_action", "whatsapp_read",
+            "open_camera", "unlock_phone", "web_search", "navigate_to", "phone_action", "whatsapp_read", "phone_status",
         )
     }
 }

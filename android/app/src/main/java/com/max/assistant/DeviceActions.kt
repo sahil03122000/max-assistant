@@ -68,6 +68,7 @@ class DeviceActions(
             "play_music" -> playMusic(args)
             "web_search" -> webSearch(args)
             "whatsapp_read" -> whatsAppRead(args)
+            "phone_status" -> phoneStatus()
             "navigate_to" -> navigateTo(args)
             "phone_action" -> phoneAction(args)
             "media_control" -> mediaControl(args)
@@ -460,6 +461,31 @@ class DeviceActions(
             result = "Button daba diya (Max ke bolne ke baad). Ye sirf pehle se chal rahi/ruki video-gaane par kaam karta hai — " +
                 "agar koi video khuli hi nahi thi to nahi chalega; tab user ko batao ki purani video main seedha nahi chala sakta, " +
                 "naam batayein to YouTube par chala dunga.",
+        )
+    }
+
+    /** Battery %, charging, internet (WiFi/data), silent — "battery kitni hai?" */
+    private fun phoneStatus(): Outcome {
+        val battery = context.getSystemService(android.os.BatteryManager::class.java)
+        val pct = battery.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val charging = battery.isCharging
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+        val net = when {
+            caps == null -> "internet nahi"
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile data"
+            else -> "internet"
+        }
+        val ringer = when (context.getSystemService(android.media.AudioManager::class.java).ringerMode) {
+            android.media.AudioManager.RINGER_MODE_SILENT -> "silent"
+            android.media.AudioManager.RINGER_MODE_VIBRATE -> "vibrate"
+            else -> "ring"
+        }
+        return Outcome(
+            true,
+            result = "Battery $pct%${if (charging) " (charge ho rahi hai)" else ""}, $net, phone $ringer mode mein. " +
+                "Jo poochha gaya sirf wahi batao.",
         )
     }
 

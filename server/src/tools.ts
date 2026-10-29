@@ -200,6 +200,11 @@ export const DEVICE_TOOLS: FunctionDeclaration[] = [
     parameters: { type: Type.OBJECT, properties: { chat: { type: Type.STRING, description: "Kiska (naam), ya khaali" } } },
   },
   {
+    name: "phone_status",
+    description: "Phone ki haalat: battery kitni %, charge ho rahi hai ya nahi, WiFi/mobile data, silent/ring. 'Battery kitni hai?' jaise sawaal.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
     name: "navigate_to",
     description: "Google Maps mein raasta (navigation) shuru karo — 'Alwar jaana hai, maps laga do', 'ghar ka raasta dikhao'. Abhi ki jagah se destination tak.",
     parameters: {
@@ -294,7 +299,10 @@ const SERVER_TOOLS: FunctionDeclaration[] = [
     description: "Aaj ki taaza khabrein (India). Kisi vishay ki khabar chahiye to topic do, jaise 'cricket', 'Jaipur', 'share market'.",
     parameters: {
       type: Type.OBJECT,
-      properties: { topic: { type: Type.STRING, description: "Optional vishay" } },
+      properties: {
+        topic: { type: Type.STRING, description: "Optional vishay" },
+        count: { type: Type.NUMBER, description: "Kitni khabrein (user ne kaha ho jaise 'top 10'), default 3" },
+      },
     },
   },
   {
@@ -385,7 +393,7 @@ export async function runServerTool(userId: string, name: string, args: Record<s
     case "web_search":
       return webSearch(String(args.query ?? "")).catch(() => ({ ok: false, error: "Internet search abhi nahi ho paaya" }));
     case "get_news":
-      return getNews(typeof args.topic === "string" && args.topic.trim() ? args.topic.trim() : undefined).catch(() => ({
+      return getNews(typeof args.topic === "string" && args.topic.trim() ? args.topic.trim() : undefined, Number(args.count) || 3).catch(() => ({
         ok: false,
         error: "Khabrein abhi nahi mil rahi",
       }));

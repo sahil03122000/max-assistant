@@ -125,7 +125,8 @@ async function openMeteo(city: string, day: "today" | "tomorrow"): Promise<Recor
   };
 }
 
-export async function getNews(topic?: string): Promise<Record<string, unknown>> {
+export async function getNews(topic?: string, count = 3): Promise<Record<string, unknown>> {
+  const want = Math.min(Math.max(Math.round(count), 1), 10);
   const url = topic
     ? `https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-IN&gl=IN&ceid=IN:en`
     : "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en";
@@ -133,13 +134,13 @@ export async function getNews(topic?: string): Promise<Record<string, unknown>> 
   const headlines = [...xml.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>/g)]
     .map((m) => decode(m[1] ?? "").replace(/\s+-\s+[^-]+$/, "").trim()) // " - Times of India" hatao
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, Math.max(want, 5));
   if (!headlines.length) return { ok: false, error: "Abhi khabrein nahi mili" };
   return {
     ok: true,
     topic: topic ?? "India top news",
     headlines,
-    instructions: "Top 3 khabrein Hinglish mein, har ek ek chhoti line mein, apne shabdon mein. Phir poocho kisi par aur jaanna hai?",
+    instructions: `Pehli ${want} khabrein Hinglish mein, har ek ek chhoti line mein, apne shabdon mein (gin ke poori ${want}).`,
   };
 }
 
