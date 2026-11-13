@@ -27,7 +27,15 @@ const DEFAULT_USER = "default";
 const app = express();
 app.use(express.json({ limit: "100kb" }));
 
+// Supabase ka free project ~7 din istemaal na ho to "pause" ho jaata hai (Max ki yaadein band). UptimeRobot har 5 min
+// /health pingta hai — usi par din mein 2 baar ek chhoti si query, taaki database hamesha "zinda" rahe.
+let lastDbTouch = 0;
+
 app.get("/health", (_req, res) => {
+  if (Date.now() - lastDbTouch > 12 * 60 * 60 * 1000) {
+    lastDbTouch = Date.now();
+    void memoryStore.list(DEFAULT_USER).catch(() => undefined);
+  }
   res.json({ ok: true });
 });
 

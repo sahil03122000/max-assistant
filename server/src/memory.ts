@@ -28,16 +28,27 @@ const newId = () => randomUUID().slice(0, 8);
 // Table banane ki SQL: server/supabase.sql
 
 function supabaseStore(url: string, key: string): MemoryStore {
-  const db = createClient(url, key, { auth: { persistSession: false } });
+  // 5 sec mein jawab na aaye to chhodo — Supabase atka ho to Max ka har jawab na atke.
+  const db = createClient(url, key, {
+    auth: { persistSession: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(5_000) }) },
+  });
   return {
     async list(userId) {
-      const { data, error } = await db
-        .from("memories")
-        .select("id, text, category, created_at")
-        .eq("user_id", userId)
-        .order("created_at");
-      if (error) throw new Error(`Memory load fail: ${error.message}`);
-      return data.map((r) => ({ id: r.id, text: r.text, category: r.category, createdAt: r.created_at }));
+      // Supabase ka free project istemaal na ho to "pause" ho jaata hai — tab yaadein nahi milti, par Max chalta rahe
+      // (pehle poora server "gadbad" bolta tha aur Max jawab hi nahi deta tha).
+      try {
+        const { data, error } = await db
+          .from("memories")
+          .select("id, text, category, created_at")
+          .eq("user_id", userId)
+          .order("created_at");
+        if (error) throw new Error(error.message);
+        return data.map((r) => ({ id: r.id, text: r.text, category: r.category, createdAt: r.created_at }));
+      } catch (err) {
+        console.warn(`  🧠 Yaadein nahi mili (Supabase): ${err instanceof Error ? err.message : err} — bina yaadon ke jaari`);
+        return [];
+      }
     },
 
     async add(userId, text, category) {
